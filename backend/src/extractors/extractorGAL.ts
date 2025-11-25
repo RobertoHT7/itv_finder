@@ -22,7 +22,7 @@ interface EstacionGAL {
 function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
     if (!coordString) return { lat: 0, lon: 0 };
     
-    // Limpieza básica
+    // Limpieza: remover comillas simples y espacios extras
     const cleanStr = coordString.replace(/'/g, "").trim();
     const parts = cleanStr.split(",").map(s => s.trim());
 
@@ -31,15 +31,29 @@ function parseGalicianCoordinates(coordString: string): { lat: number, lon: numb
     // Caso 1: Formato Grados Minutos (e.g., 43° 18.856)
     if (parts[0].includes("°")) {
         const parseDM = (str: string) => {
-            const [d, m] = str.split("°").map(parseFloat);
-            const sign = str.includes("-") ? -1 : 1;
-            return sign * (Math.abs(d) + (m / 60));
+            // Extraer el signo
+            const negative = str.includes("-");
+            // Eliminar el signo para el parsing
+            const cleanNum = str.replace("-", "").trim();
+            const [grados, minutos] = cleanNum.split("°").map(s => s.trim());
+            const g = parseFloat(grados);
+            const m = parseFloat(minutos);
+            
+            if (isNaN(g) || isNaN(m)) return 0;
+            
+            const decimal = g + (m / 60);
+            return negative ? -decimal : decimal;
         };
         return { lat: parseDM(parts[0]), lon: parseDM(parts[1]) };
     } 
     
     // Caso 2: Decimal simple (e.g., 42.906076)
-    return { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]) };
+    const lat = parseFloat(parts[0]);
+    const lon = parseFloat(parts[1]);
+    
+    if (isNaN(lat) || isNaN(lon)) return { lat: 0, lon: 0 };
+    
+    return { lat, lon };
 }
 
 export async function loadGALData() {
@@ -47,7 +61,8 @@ export async function loadGALData() {
     const results: any[] = []; // Usamos any temporalmente por problemas de encoding en claves CSV
 
     return new Promise<void>((resolve, reject) => {
-        fs.createReadStream(filePath)
+        // Leer con codificación latin1 (ISO-8859-1) en lugar de UTF-8
+        fs.createReadStream(filePath, { encoding: 'latin1' })
             // Aseguramos que el separador sea ;
             .pipe(csv({ separator: ";" })) 
             .on("data", (row) => results.push(row))
