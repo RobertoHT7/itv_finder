@@ -30,8 +30,8 @@ export async function loadCATData() {
         const localidadId = await getOrCreateLocalidad(municipi, provinciaId);
         if (!localidadId) continue;
 
-        // 1. Transformación de TIPO (Mapping Page 4: Asignar valor fijo "Estacion Fija")
-        const tipoEstacion: TipoEstacion = "Estacion Fija";
+        // 1. Transformación de TIPO (Mapping Page 4: Asignar valor fijo "Estación_fija")
+        const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
 
         // 2. Coordenadas (Dividir por 1e6)
         const latitud = est.lat?.[0] ? parseFloat(est.lat[0]) / 1e6 : 0;

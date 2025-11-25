@@ -4,15 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "load:cv": "ts-node src/extractors/extractorCV.ts",
-    "load:gal": "ts-node src/extractors/extractorGAL.ts",
-    "load:cat": "ts-node src/extractors/extractorCAT.ts",
-    "load:all": "ts-node src/api/carga.ts",
     "carga": "ts-node src/api/carga.ts",
     "limpiar": "ts-node src/api/limpiar.ts",
+    "estadisticas": "ts-node -e \"import('./src/api/estadisticas').then(m => m.obtenerEstadisticas())\"",
     "test:types": "ts-node src/api/testTypes.ts"
   },
   "keywords": [],

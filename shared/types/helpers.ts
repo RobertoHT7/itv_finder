@@ -35,7 +35,7 @@ export function validarDatosEstacion(data: Partial<EstacionInsert>): string[] {
         errores.push("El nombre es obligatorio");
     }
 
-    if (!data.tipo || !["Estacion Fija", "Estacion Movil", "Otros"].includes(data.tipo)) {
+    if (!data.tipo || !["estacion_fija", "estacion_movil", "otros", "Estacion Fija", "Estacion Movil", "Otros"].includes(data.tipo)) {
         errores.push("El tipo de estación no es válido");
     }
 
@@ -82,46 +82,13 @@ export function normalizarTipoEstacion(tipo: string | undefined): TipoEstacion {
 
     const tipoNorm = tipo.toLowerCase().trim().replaceAll(" ", "_");
 
-    if (tipoNorm.includes("fija") || tipoNorm === "estacion_fija") {
+    if (tipoNorm.includes("fija") || tipoNorm === "Estacion Fija") {
         return "Estacion Fija";
     }
 
-    if (tipoNorm.includes("movil") || tipoNorm.includes("móvil") || tipoNorm === "estacion_movil") {
+    if (tipoNorm.includes("movil") || tipoNorm.includes("móvil") || tipoNorm === "Estacion Movil") {
         return "Estacion Movil";
     }
 
     return "Otros";
-}
-
-/**
- * Valida un código postal español
- * @param cp - Código postal a validar
- * @returns true si es válido, false en caso contrario
- */
-export function validarCodigoPostal(cp: string): boolean {
-    return /^\d{5}$/.test(cp);
-}
-
-/**
- * Valida coordenadas geográficas
- * @param lat - Latitud
- * @param lon - Longitud
- * @returns true si son válidas, false en caso contrario
- */
-export function validarCoordenadas(lat: number, lon: number): boolean {
-    return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-}
-
-/**
- * Formatea un nombre de estación de forma consistente
- * @param nombre - Nombre sin formatear
- * @returns Nombre formateado
- */
-export function formatearNombreEstacion(nombre: string): string {
-    return nombre
-        .trim()
-        .replace(/\s+/g, " ") // Normalizar espacios múltiples
-        .split(" ")
-        .map((palabra) => palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase())
-        .join(" ");
 }
