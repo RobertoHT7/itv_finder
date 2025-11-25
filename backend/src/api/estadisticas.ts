@@ -4,8 +4,8 @@ import { supabase } from "../db/supabaseClient";
  * Obtiene estadísticas generales de la base de datos
  */
 export async function obtenerEstadisticas() {
-    console.log("\n📊 Estadísticas de la Base de Datos");
-    console.log("═══════════════════════════════════\n");
+    console.log("\nEstadisticas de la Base de Datos");
+    console.log("===================================\n");
 
     try {
         // Contar provincias
@@ -40,7 +40,7 @@ export async function obtenerEstadisticas() {
             .eq("tipo", "Otros");
 
         if (errorProvincias || errorLocalidades || errorEstaciones) {
-            console.error("❌ Error obteniendo estadísticas");
+            console.error("Error obteniendo estadisticas");
             return {
                 success: false,
                 data: null
@@ -59,12 +59,12 @@ export async function obtenerEstadisticas() {
         };
 
         // Mostrar estadísticas
-        console.log(`📍 Provincias: ${stats.provincias}`);
-        console.log(`🏘️  Localidades: ${stats.localidades}`);
-        console.log(`🏢 Estaciones ITV: ${stats.estaciones.total}`);
-        console.log(`   ├─ Fijas: ${stats.estaciones.fijas}`);
-        console.log(`   ├─ Móviles: ${stats.estaciones.moviles}`);
-        console.log(`   └─ Otros: ${stats.estaciones.otros}`);
+        console.log(`Provincias: ${stats.provincias}`);
+        console.log(`Localidades: ${stats.localidades}`);
+        console.log(`Estaciones ITV: ${stats.estaciones.total}`);
+        console.log(`   - Fijas: ${stats.estaciones.fijas}`);
+        console.log(`   - Moviles: ${stats.estaciones.moviles}`);
+        console.log(`   - Otros: ${stats.estaciones.otros}`);
         console.log();
 
         return {
@@ -72,7 +72,7 @@ export async function obtenerEstadisticas() {
             data: stats
         };
     } catch (error) {
-        console.error("❌ Error obteniendo estadísticas:", error);
+        console.error("Error obteniendo estadisticas:", error);
         return {
             success: false,
             data: null,
@@ -92,7 +92,7 @@ export async function baseDeDatosVacia(): Promise<boolean> {
 
         return (count || 0) === 0;
     } catch (error) {
-        console.error("❌ Error verificando base de datos:", error);
+        console.error("Error verificando base de datos:", error);
         return true;
     }
 }

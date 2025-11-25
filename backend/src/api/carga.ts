@@ -7,23 +7,23 @@ import { loadCATData } from "../extractors/extractorCAT";
  * desde todas las comunidades autónomas disponibles
  */
 export async function cargarTodosLosDatos() {
-    console.log("\n🚀 Iniciando carga completa de datos ITV...");
-    console.log("═══════════════════════════════════════════\n");
+    console.log("\nIniciando carga completa de datos ITV...");
+    console.log("==========================================\n");
 
     try {
-        console.log("📍 Comunidad Valenciana...");
+        console.log("Comunidad Valenciana...");
         await loadCVData();
 
-        console.log("\n📍 Galicia...");
+        console.log("\nGalicia...");
         await loadGALData();
 
-        console.log("\n📍 Cataluña...");
+        console.log("\nCataluna...");
         await loadCATData();
 
-        console.log("\n✅ Proceso ETL completo y datos cargados en Supabase\n");
+        console.log("\nProceso ETL completo y datos cargados en Supabase\n");
         return { success: true };
     } catch (error) {
-        console.error("\n❌ Error en la carga de datos:", error);
+        console.error("\nError en la carga de datos:", error);
         return { success: false, error };
     }
 }
