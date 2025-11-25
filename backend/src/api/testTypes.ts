@@ -1,5 +1,5 @@
 import { supabase } from "../db/supabaseClient";
-import { TablesInsert, Tables } from "../../types/supabase";
+import type { Estacion, EstacionInsert, Provincia } from "../../../shared/types";
 
 /**
  * Script de prueba para verificar que los tipos de Supabase funcionan correctamente
@@ -24,7 +24,7 @@ async function testSupabaseTypes() {
         if (provincias && provincias.length > 0) {
             console.log("   Ejemplo:", provincias[0]);
             // TypeScript sabe que provincias[0] tiene: id, nombre
-            const provincia: Tables<"provincia"> = provincias[0];
+            const provincia: Provincia = provincias[0];
             console.log(`   - ID: ${provincia.id}, Nombre: ${provincia.nombre}`);
         }
     }
@@ -44,7 +44,7 @@ async function testSupabaseTypes() {
     } else {
         console.log(`✅ Localidades encontradas: ${localidades?.length || 0}`);
         if (localidades && localidades.length > 0) {
-            console.log("   Ejemplo:", localidades[0].nombre);
+            console.log("   Ejemplo:", (localidades[0] as any).nombre);
         }
     }
 
@@ -60,7 +60,7 @@ async function testSupabaseTypes() {
     } else {
         console.log(`✅ Estaciones encontradas: ${estaciones?.length || 0}`);
         if (estaciones && estaciones.length > 0) {
-            const estacion: Tables<"estacion"> = estaciones[0];
+            const estacion: Estacion = estaciones[0];
             console.log(`   Ejemplo: ${estacion.nombre}`);
             console.log(`   - Tipo: ${estacion.tipo}`);
             console.log(`   - Dirección: ${estacion.direccion}`);
@@ -73,17 +73,17 @@ async function testSupabaseTypes() {
     const { count: countFijas } = await supabase
         .from("estacion")
         .select("*", { count: "exact", head: true })
-        .eq("tipo", "estacion_fija");
+        .eq("tipo", "Estacion Fija");
 
     const { count: countMoviles } = await supabase
         .from("estacion")
         .select("*", { count: "exact", head: true })
-        .eq("tipo", "estacion_movil");
+        .eq("tipo", "Estacion Movil");
 
     const { count: countOtros } = await supabase
         .from("estacion")
         .select("*", { count: "exact", head: true })
-        .eq("tipo", "otros");
+        .eq("tipo", "Otros");
 
     console.log("✅ Distribución de tipos:");
     console.log(`   - Estaciones fijas: ${countFijas || 0}`);
@@ -92,10 +92,9 @@ async function testSupabaseTypes() {
 
     // Test 6: Verificar que los tipos de inserción funcionan
     console.log("\n🔧 Test 6: Verificando tipos de inserción...");
-    const ejemploInsercion: TablesInsert<"estacion"> = {
+    const ejemploInsercion: EstacionInsert = {
         nombre: "Test ITV",
-        tipo: "estacion_fija",
-        tipo_estacion: "estacion_fija",
+        tipo: "Estacion Fija",
         direccion: "Calle Test 123",
         codigo_postal: "00000",
         latitud: 0,

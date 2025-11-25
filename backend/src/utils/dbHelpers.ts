@@ -1,5 +1,5 @@
 import { supabase } from "../db/supabaseClient";
-import { TablesInsert } from "../../types/supabase";
+import type { ProvinciaInsert, LocalidadInsert, Provincia, Localidad } from "../../../shared/types";
 
 /**
  * Inserta una provincia si no existe y devuelve su id
@@ -18,15 +18,15 @@ export async function getOrCreateProvincia(nombre: string): Promise<number | nul
         return null;
     }
 
-    if (found) return found.id;
+    if (found) return (found as Provincia).id;
 
-    const provinciaData: TablesInsert<"provincia"> = {
+    const provinciaData: ProvinciaInsert = {
         nombre: nombreNorm
     };
 
     const { data: created, error: insertError } = await supabase
         .from("provincia")
-        .insert(provinciaData)
+        .insert(provinciaData as any)
         .select("id")
         .single();
 
@@ -35,7 +35,7 @@ export async function getOrCreateProvincia(nombre: string): Promise<number | nul
         return null;
     }
 
-    return created.id;
+    return (created as Provincia).id;
 }
 
 /**
@@ -56,16 +56,16 @@ export async function getOrCreateLocalidad(nombre: string, provinciaId: number):
         return null;
     }
 
-    if (found) return found.id;
+    if (found) return (found as Localidad).id;
 
-    const localidadData: TablesInsert<"localidad"> = {
+    const localidadData: LocalidadInsert = {
         nombre: nombreNorm,
         provinciaId
     };
 
     const { data: created, error: insertError } = await supabase
         .from("localidad")
-        .insert(localidadData)
+        .insert(localidadData as any)
         .select("id")
         .single();
 
@@ -74,5 +74,5 @@ export async function getOrCreateLocalidad(nombre: string, provinciaId: number):
         return null;
     }
 
-    return created.id;
+    return (created as Localidad).id;
 }
