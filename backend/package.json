@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "load:cv": "ts-node src/extractors/extractorCV.ts",
+    "load:gal": "ts-node src/extractors/extractorGAL.ts",
+    "load:cat": "ts-node src/extractors/extractorCAT.ts",
+    "load:all": "ts-node src/api/carga.ts",
+    "carga": "ts-node src/api/carga.ts",
+    "test:types": "ts-node src/api/testTypes.ts"
   },
   "keywords": [],
   "author": "",
@@ -14,13 +20,18 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.81.0",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/node": "^24.10.0",
+    "@types/node-fetch": "^2.6.13",
+    "@types/xml2js": "^0.4.14",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

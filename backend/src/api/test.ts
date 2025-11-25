@@ -3,7 +3,8 @@ import { supabase } from "../db/supabaseClient";
 
 export const testConnection = async (req: Request, res: Response) => {
     try {
-        const { data, error } = await supabase.from("test").select("*").limit(1);
+        // Probamos con la tabla provincia que seguro existe
+        const { data, error } = await supabase.from("provincia").select("*").limit(1);
 
         if (error) {
             return res.status(500).json({
