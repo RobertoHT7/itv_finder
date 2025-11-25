@@ -25,7 +25,7 @@ export async function loadCVData() {
 
     for (const est of estaciones) {
         const rawTipo = est["TIPO ESTACIÓN"] || "";
-        const municipio = est.MUNICIPIO || "Desconocido"; // Manejo de posibles nulos
+        const municipio = est.MUNICIPIO || est.PROVINCIA || "Desconocido"; // Si no hay municipio, usar provincia
         const codigoPostal = est["C.POSTAL"] ? String(est["C.POSTAL"]) : "00000";
 
         // 1. Obtener IDs relacionales
