@@ -2,13 +2,13 @@ import { Request, Response } from "express";
 import { supabase } from "../db/supabaseClient";
 
 /**
- * Obtener todas las estaciones de la Comunidad Valenciana
+ * Obtener todas las estaciones de Galicia
  */
-export const getCVStations = async (req: Request, res: Response) => {
+export const getGALStations = async (req: Request, res: Response) => {
     const { data: provincias, error: errorProvincias } = await supabase
         .from("provincia")
         .select("id")
-        .in("nombre", ["Valencia", "Castellón", "Alicante"]);
+        .in("nombre", ["A Coruña", "Lugo", "Ourense", "Pontevedra"]);
 
     if (errorProvincias) return res.status(500).json({ error: errorProvincias.message });
 
@@ -43,9 +43,9 @@ export const getCVStations = async (req: Request, res: Response) => {
 };
 
 /**
- * Obtener estaciones de CV por provincia
+ * Obtener estaciones de Galicia por provincia
  */
-export const getCVStationsByProvincia = async (req: Request, res: Response) => {
+export const getGALStationsByProvincia = async (req: Request, res: Response) => {
     const { provincia } = req.params;
 
     // Obtener ID de la provincia
@@ -90,23 +90,23 @@ export const getCVStationsByProvincia = async (req: Request, res: Response) => {
 };
 
 /**
- * Obtener estaciones de CV por municipio
+ * Obtener estaciones de Galicia por concello (municipio)
  */
-export const getCVStationsByMunicipio = async (req: Request, res: Response) => {
-    const { municipio } = req.params;
+export const getGALStationsByConcello = async (req: Request, res: Response) => {
+    const { concello } = req.params;
 
     // Obtener ID de la localidad
     const { data: localidadData, error: errorLocalidad } = await supabase
         .from("localidad")
         .select("id")
-        .ilike("nombre", municipio);
+        .ilike("nombre", concello);
 
     if (errorLocalidad) return res.status(500).json({ error: errorLocalidad.message });
 
     const localidadIds = localidadData?.map(l => l.id) || [];
 
     if (localidadIds.length === 0) {
-        return res.json({ total: 0, municipio, estaciones: [] });
+        return res.json({ total: 0, concello, estaciones: [] });
     }
 
     // Obtener estaciones de esa localidad
@@ -126,19 +126,19 @@ export const getCVStationsByMunicipio = async (req: Request, res: Response) => {
         .in("localidadId", localidadIds);
 
     if (error) return res.status(500).json({ error: error.message });
-    return res.json({ total: data?.length || 0, municipio, estaciones: data });
+    return res.json({ total: data?.length || 0, concello, estaciones: data });
 };
 
 /**
- * Obtener estaciones de CV por tipo
+ * Obtener estaciones de Galicia por tipo
  */
-export const getCVStationsByTipo = async (req: Request, res: Response) => {
+export const getGALStationsByTipo = async (req: Request, res: Response) => {
     const { tipo } = req.params;
 
     const { data: provincias, error: errorProvincias } = await supabase
         .from("provincia")
         .select("id")
-        .in("nombre", ["Valencia", "Castellón", "Alicante"]);
+        .in("nombre", ["A Coruña", "Lugo", "Ourense", "Pontevedra"]);
 
     if (errorProvincias) return res.status(500).json({ error: errorProvincias.message });
 
@@ -174,9 +174,9 @@ export const getCVStationsByTipo = async (req: Request, res: Response) => {
 };
 
 /**
- * Buscar estaciones de CV cercanas a unas coordenadas
+ * Buscar estaciones de Galicia cercanas a unas coordenadas
  */
-export const getCVStationsNearby = async (req: Request, res: Response) => {
+export const getGALStationsNearby = async (req: Request, res: Response) => {
     const { lat, lon, radius = 50 } = req.query;
 
     if (!lat || !lon) {
@@ -187,7 +187,6 @@ export const getCVStationsNearby = async (req: Request, res: Response) => {
     const longitude = parseFloat(lon as string);
     const radiusKm = parseFloat(radius as string);
 
-    // Obtener todas las estaciones de CV con coordenadas
     const { data, error } = await supabase
         .from("estacion")
         .select(`
@@ -206,9 +205,12 @@ export const getCVStationsNearby = async (req: Request, res: Response) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // Calcular distancia y filtrar
     const estacionesCercanas = data
-        ?.map((estacion: any) => {
+        ?.filter((estacion: any) => {
+            const provincia = estacion.localidad?.provincia?.nombre;
+            return ["A Coruña", "Lugo", "Ourense", "Pontevedra"].includes(provincia);
+        })
+        .map((estacion: any) => {
             const distance = calculateDistance(
                 latitude,
                 longitude,
@@ -229,10 +231,60 @@ export const getCVStationsNearby = async (req: Request, res: Response) => {
 };
 
 /**
- * Calcular distancia entre dos puntos usando fórmula de Haversine
+ * Obtener estadísticas de estaciones de Galicia
  */
+export const getGALStats = async (req: Request, res: Response) => {
+    const { data: provincias, error: errorProvincias } = await supabase
+        .from("provincia")
+        .select("id")
+        .in("nombre", ["A Coruña", "Lugo", "Ourense", "Pontevedra"]);
+
+    if (errorProvincias) return res.status(500).json({ error: errorProvincias.message });
+
+    const provinciaIds = provincias?.map(p => p.id) || [];
+
+    const { data: localidades, error: errorLocalidades } = await supabase
+        .from("localidad")
+        .select("id")
+        .in("provinciaId", provinciaIds);
+
+    if (errorLocalidades) return res.status(500).json({ error: errorLocalidades.message });
+
+    const localidadIds = localidades?.map(l => l.id) || [];
+
+    const { data, error } = await supabase
+        .from("estacion")
+        .select(`
+            tipo,
+            localidad:localidadId (
+                provincia:provinciaId (
+                    nombre
+                )
+            )
+        `)
+        .in("localidadId", localidadIds);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const stats = {
+        total: data?.length || 0,
+        por_provincia: {} as Record<string, number>,
+        por_tipo: {} as Record<string, number>,
+    };
+
+    data?.forEach((estacion: any) => {
+        const provincia = estacion.localidad?.provincia?.nombre || "Desconocido";
+        const tipo = estacion.tipo || "Desconocido";
+
+        stats.por_provincia[provincia] = (stats.por_provincia[provincia] || 0) + 1;
+        stats.por_tipo[tipo] = (stats.por_tipo[tipo] || 0) + 1;
+    });
+
+    return res.json(stats);
+};
+
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Radio de la Tierra en km
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =
