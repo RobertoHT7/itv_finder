@@ -1,8 +1,13 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+
 import { testConnection } from "./api/test";
-import { getCVStations } from "./wrappers/wrapperCV";
+import { cvWrapper } from "./wrappers/wrapperCV";
+import { galWrapper } from "./wrappers/wrapperGAL";
+import { catWrapper } from "./wrappers/wrapperCAT";
+//import { globalWrapper } from "./wrappers/globalWrapper";
+
 import { limpiarBaseDeDatos } from "./api/limpiar";
 import { cargarTodosLosDatos } from "./api/carga";
 import { obtenerEstadisticas } from "./api/estadisticas";
@@ -14,109 +19,59 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
-// ENDPOINTS DE LA API
-
+/* ROOT */
 app.get("/", (req: Request, res: Response) =>
     res.json({
         status: "API ITV Finder running",
         version: "1.0.0",
         endpoints: {
+            cv: "/api/cv",
+            gal: "/api/gal",
+            cat: "/api/cat",
+            global: "/api/stations",
             estadisticas: "/api/estadisticas",
             cargar: "/api/carga",
             limpiar: "/api/limpiar",
-            test: "/api/test"
-        }
+            test: "/api/test",
+        },
     })
 );
 
-// Endpoint para obtener estadísticas
-app.get("/api/estadisticas", async (req: Request, res: Response) => {
-    try {
-        const result = await obtenerEstadisticas();
-        if (result.success) {
-            res.json({
-                success: true,
-                data: result.data
-            });
-        } else {
-            res.status(500).json({
-                success: false,
-                error: "Error al obtener estadísticas"
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: "Error al obtener estadísticas"
-        });
-    }
+/* ESTADÍSTICAS */
+app.get("/api/estadisticas", async (req, res) => {
+    const result = await obtenerEstadisticas();
+    res.json(result);
 });
 
-// Endpoint para cargar datos
-app.post("/api/carga", async (req: Request, res: Response) => {
-    try {
-        const result = await cargarTodosLosDatos();
-        if (result.success) {
-            res.json({
-                success: true,
-                message: "Datos cargados correctamente"
-            });
-        } else {
-            res.status(500).json({
-                success: false,
-                error: "Error al cargar datos"
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: "Error al cargar datos"
-        });
-    }
+/* CARGA Y LIMPIEZA */
+app.post("/api/carga", async (req, res) => {
+    const result = await cargarTodosLosDatos();
+    res.json(result);
 });
 
-// Endpoint para limpiar la base de datos
-app.delete("/api/limpiar", async (req: Request, res: Response) => {
-    try {
-        const result = await limpiarBaseDeDatos();
-        if (result.success) {
-            res.json({
-                success: true,
-                message: "Base de datos limpiada correctamente"
-            });
-        } else {
-            res.status(500).json({
-                success: false,
-                error: "Error al limpiar base de datos"
-            });
-        }
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: "Error al limpiar base de datos"
-        });
-    }
+app.delete("/api/limpiar", async (req, res) => {
+    const result = await limpiarBaseDeDatos();
+    res.json(result);
 });
 
-// Endpoint de prueba de conexión
+/* TEST */
 app.get("/api/test", testConnection);
 
-// Endpoint de Comunidad Valenciana (wrapper)
-app.get("/api/cv", getCVStations);
+/* WRAPPERS */
+app.get("/api/cv", (req, res) => cvWrapper.getStations(req, res));
+app.get("/api/gal", (req, res) => galWrapper.getStations(req, res));
+app.get("/api/cat", (req, res) => catWrapper.getStations(req, res));
+//app.get("/api/stations", (req, res) => globalWrapper.getAll(req, res));
 
-
-// INICIO DEL SERVIDOR
+/* SERVER */
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, async () => {
     console.clear();
-    console.log("╔════════════════════════════════════════════════════╗");
-    console.log("║         ITV FINDER - Backend Server          ║");
-    console.log("╚════════════════════════════════════════════════════╝\n");
-    console.log(`✅ Servidor ejecutándose en el puerto ${PORT}`);
-    console.log(`🌐 URL: http://localhost:${PORT}\n`);
+    console.log("╔══════════════════════════════════════════════╗");
+    console.log("║           ITV FINDER - Backend API           ║");
+    console.log("╚══════════════════════════════════════════════╝");
+    console.log(`Servidor activo → http://localhost:${PORT}\n`);
 
-    // Iniciar el menú interactivo de administración
     await iniciarMenu();
 });

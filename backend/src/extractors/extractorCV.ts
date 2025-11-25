@@ -2,9 +2,8 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-
 import { geocodificarDireccion, delay } from "../utils/geocoding";
-import { normalizarTipoEstacion, validarDatosEstacion, type EstacionInsert } from "../../../shared/types";
+import { validarDatosEstacion, type EstacionInsert } from "../../../shared/types";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;  // Nota: Con acento en el JSON original

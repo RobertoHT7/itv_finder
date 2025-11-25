@@ -41,7 +41,10 @@ export async function loadCATData() {
         // "Juntar estos 3 campos XML: denominaci + " - " + municipi + " (" + operador + ")"
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
 
-        // 4. Transformación de CONTACTO
+        // 4. Transformación de NOMBRE
+        const nombre = `ITV de ${municipi}`;
+
+        // 5. Transformación de CONTACTO
         // "Si empieza por https: -> Reemplazar por URL específica"
         let contacto = est.correu_electr_nic?.[0] || "Sin contacto";
         if (contacto.startsWith("https") || contacto.startsWith("http")) {
@@ -49,7 +52,7 @@ export async function loadCATData() {
         }
 
         const estacionData: EstacionInsert = {
-            nombre: denominacio || "Sin nombre",
+            nombre: nombre,
             tipo: tipoEstacion,
             direccion: est.adre_a?.[0] || "Sin dirección",
             codigo_postal: est.cp?.[0] || "00000",
