@@ -2,13 +2,13 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { normalizarTipoEstacion, validarDatosEstacion, EstacionInsert } from "../types/estacion.types";
+import { validarDatosEstacion, EstacionInsert, TipoEstacion } from "../types/estacion.types";
 
 interface EstacionCV {
-    "TIPO ESTACIÓN": string;  // Nota: Con acento en el JSON original
+    "TIPO ESTACIÓN": string;
     PROVINCIA: string;
     MUNICIPIO: string;
-    "C.POSTAL": number;
+    "C.POSTAL": number | string;
     "DIRECCIÓN": string;
     "Nº ESTACIÓN": number;
     HORARIOS: string;
@@ -23,34 +23,54 @@ export async function loadCVData() {
     console.log(`🔄 Cargando ${estaciones.length} estaciones de Comunidad Valenciana...`);
 
     for (const est of estaciones) {
-        // Las estaciones móviles pueden no tener municipio
-        const municipio = est.MUNICIPIO || "Móvil";
+        const rawTipo = est["TIPO ESTACIÓN"] || "";
+        const municipio = est.MUNICIPIO || "Desconocido"; // Manejo de posibles nulos
         const codigoPostal = est["C.POSTAL"] ? String(est["C.POSTAL"]) : "00000";
 
+        // 1. Obtener IDs relacionales
         const provinciaId = await getOrCreateProvincia(est.PROVINCIA);
         if (!provinciaId) continue;
 
         const localidadId = await getOrCreateLocalidad(municipio, provinciaId);
         if (!localidadId) continue;
 
-        const tipoEstacion = normalizarTipoEstacion(est["TIPO ESTACIÓN"]);
+        // 2. Transformación de TIPO (según Mapping Page 1)
+        let tipoEstacion: TipoEstacion = "otros";
+        if (rawTipo.includes("Fija")) tipoEstacion = "estacion_fija";
+        else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "estacion_movil";
+        else tipoEstacion = "otros";
+
+        // 3. Transformación de URL (según Mapping Page 2)
+        let url = "https://sitval.com/centros/";
+        if (tipoEstacion === "estacion_movil") {
+            url += "movil";
+        } else if (tipoEstacion === "otros" || rawTipo.includes("Agrícola")) {
+            url += "agricola";
+        }
+
+        // 4. Transformación de NOMBRE (según Mapping Page 1)
+        const nombre = `ITV de ${municipio}`;
+
+        // 5. Transformación de DESCRIPCIÓN (según Mapping Page 1)
+        const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
         const estacionData: EstacionInsert = {
-            nombre: `ITV ${municipio} ${est["Nº ESTACIÓN"]}`,
+            nombre: nombre,
             tipo: tipoEstacion,
             tipo_estacion: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
             codigo_postal: codigoPostal,
-            longitud: 0, // podrías añadir geocodificación más adelante
+            // Nota: El mapping pide convertir Dirección a Lat/Long. 
+            // Sin API de Geocodificación, esto no es posible automáticamente. Se deja en 0.
             latitud: 0,
-            descripcion: `Estación ITV ${municipio} (nº ${est["Nº ESTACIÓN"]})`,
+            longitud: 0,
+            descripcion: descripcion,
             horario: est.HORARIOS || "No especificado",
             contacto: est.CORREO || "Sin contacto",
-            url: "https://sitval.com/",
+            url: url,
             localidadId,
         };
 
-        // Validar datos antes de insertar
         const errores = validarDatosEstacion(estacionData);
         if (errores.length > 0) {
             console.error(`❌ Datos inválidos para ${municipio}:`, errores);
@@ -58,7 +78,7 @@ export async function loadCVData() {
         }
 
         const { error } = await supabase.from("estacion").insert(estacionData);
-        if (error) console.error("❌ Error insertando estación:", error.message);
+        if (error) console.error("❌ Error insertando estación CV:", error.message);
     }
 
     console.log("✅ Datos de Comunidad Valenciana cargados correctamente");

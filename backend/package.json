@@ -12,6 +12,7 @@
     "load:cat": "ts-node src/extractors/extractorCAT.ts",
     "load:all": "ts-node src/api/carga.ts",
     "carga": "ts-node src/api/carga.ts",
+    "limpiar": "ts-node src/api/limpiar.ts",
     "test:types": "ts-node src/api/testTypes.ts"
   },
   "keywords": [],
