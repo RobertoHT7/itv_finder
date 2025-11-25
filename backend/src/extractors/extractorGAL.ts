@@ -89,13 +89,12 @@ export async function loadGALData() {
                     const contacto = `Tel: ${telefono || "N/A"} Email: ${email || "N/A"}`;
 
                     // Transformación de TIPO (Mapping Page 2 - Asumimos Fija por defecto según CSV)
-                    let tipoEstacion: TipoEstacion = "estacion_fija";
-                    if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "estacion_movil";
+                    let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
+                    if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "Estacion Movil";
 
                     const estacionData: EstacionInsert = {
                         nombre: nombre,
                         tipo: tipoEstacion,
-                        tipo_estacion: tipoEstacion,
                         direccion: direccion || "Sin dirección",
                         codigo_postal: cp || "00000",
                         latitud: lat,

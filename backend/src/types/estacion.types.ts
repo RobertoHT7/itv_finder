@@ -38,7 +38,7 @@ export function validarDatosEstacion(data: Partial<EstacionInsert>): string[] {
         errores.push("El nombre es obligatorio");
     }
 
-    if (!data.tipo || !["estacion_fija", "estacion_movil", "otros"].includes(data.tipo)) {
+    if (!data.tipo || !["estacion_fija", "estacion_movil", "otros", "Estacion Fija", "Estacion Movil", "Otros"].includes(data.tipo)) {
         errores.push("El tipo de estación no es válido");
     }
 
@@ -70,19 +70,19 @@ export function validarDatosEstacion(data: Partial<EstacionInsert>): string[] {
  */
 export function normalizarTipoEstacion(tipo: string | undefined): TipoEstacion {
     if (!tipo) {
-        console.warn("⚠️  Tipo de estación undefined, usando 'otros'");
-        return "otros";
+        console.warn("⚠️  Tipo de estación undefined, usando 'Otros'");
+        return "Otros";
     }
 
     const tipoNorm = tipo.toLowerCase().trim().replaceAll(" ", "_");
 
-    if (tipoNorm.includes("fija") || tipoNorm === "estacion_fija") {
-        return "estacion_fija";
+    if (tipoNorm.includes("fija") || tipoNorm === "Estacion Fija") {
+        return "Estacion Fija";
     }
 
-    if (tipoNorm.includes("movil") || tipoNorm.includes("móvil") || tipoNorm === "estacion_movil") {
-        return "estacion_movil";
+    if (tipoNorm.includes("movil") || tipoNorm.includes("móvil") || tipoNorm === "Estacion Movil") {
+        return "Estacion Movil";
     }
 
-    return "otros";
+    return "Otros";
 }

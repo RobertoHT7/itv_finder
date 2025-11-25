@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -52,7 +27,6 @@ export type Database = {
           longitud: number
           nombre: string
           tipo: Database["public"]["Enums"]["TipoEstacion"]
-          tipo_estacion: Database["public"]["Enums"]["TipoEstacion"] | null
           url: string
         }
         Insert: {
@@ -67,7 +41,6 @@ export type Database = {
           longitud: number
           nombre: string
           tipo: Database["public"]["Enums"]["TipoEstacion"]
-          tipo_estacion?: Database["public"]["Enums"]["TipoEstacion"] | null
           url: string
         }
         Update: {
@@ -82,7 +55,6 @@ export type Database = {
           longitud?: number
           nombre?: string
           tipo?: Database["public"]["Enums"]["TipoEstacion"]
-          tipo_estacion?: Database["public"]["Enums"]["TipoEstacion"] | null
           url?: string
         }
         Relationships: [
@@ -144,7 +116,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      TipoEstacion: "estacion_fija" | "estacion_movil" | "otros"
+      TipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -270,12 +242,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
-      TipoEstacion: ["estacion_fija", "estacion_movil", "otros"],
+      TipoEstacion: ["Estacion Fija", "Estacion Movil", "Otros"],
     },
   },
 } as const

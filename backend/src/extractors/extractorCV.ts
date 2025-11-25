@@ -3,6 +3,7 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarDatosEstacion, EstacionInsert, TipoEstacion } from "../types/estacion.types";
+import { geocodificarDireccion, delay } from "../utils/geocoding";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -35,16 +36,16 @@ export async function loadCVData() {
         if (!localidadId) continue;
 
         // 2. Transformación de TIPO (según Mapping Page 1)
-        let tipoEstacion: TipoEstacion = "otros";
-        if (rawTipo.includes("Fija")) tipoEstacion = "estacion_fija";
-        else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "estacion_movil";
-        else tipoEstacion = "otros";
+        let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
+        if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
+        else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "Estacion Movil";
+        else tipoEstacion = "Otros";
 
         // 3. Transformación de URL (según Mapping Page 2)
         let url = "https://sitval.com/centros/";
-        if (tipoEstacion === "estacion_movil") {
+        if (tipoEstacion === "Estacion Movil") {
             url += "movil";
-        } else if (tipoEstacion === "otros" || rawTipo.includes("Agrícola")) {
+        } else if (tipoEstacion === "Otros" || rawTipo.includes("Agrícola")) {
             url += "agricola";
         }
 
@@ -54,22 +55,37 @@ export async function loadCVData() {
         // 5. Transformación de DESCRIPCIÓN (según Mapping Page 1)
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
+        // 6. Geocodificación de la dirección
+        console.log(`📍 Geocodificando: ${municipio}...`);
+        const coordenadas = await geocodificarDireccion(
+            est["DIRECCIÓN"] || "",
+            municipio,
+            est.PROVINCIA,
+            codigoPostal
+        );
+
+        // Respetar rate limit de Nominatim (1 request/segundo)
+        await delay(1100);
+
         const estacionData: EstacionInsert = {
             nombre: nombre,
             tipo: tipoEstacion,
-            tipo_estacion: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
             codigo_postal: codigoPostal,
-            // Nota: El mapping pide convertir Dirección a Lat/Long. 
-            // Sin API de Geocodificación, esto no es posible automáticamente. Se deja en 0.
-            latitud: 0,
-            longitud: 0,
+            latitud: coordenadas?.lat || 0,
+            longitud: coordenadas?.lon || 0,
             descripcion: descripcion,
             horario: est.HORARIOS || "No especificado",
             contacto: est.CORREO || "Sin contacto",
             url: url,
             localidadId,
         };
+
+        if (coordenadas) {
+            console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+        } else {
+            console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
+        }
 
         const errores = validarDatosEstacion(estacionData);
         if (errores.length > 0) {
