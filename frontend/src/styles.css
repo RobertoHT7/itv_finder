@@ -1,0 +1,93 @@
+:root{
+  /* Lightened palette for improved readability */
+  --bg: #f8fafc;            /* page background */
+  --card: #ffffff;          /* panel / card backgrounds */
+  --panel-text: #0b1220;    /* text inside panels (dark) */
+  --muted: #64748b;         /* secondary text */
+  --accent: #2563eb;        /* action color */
+  --text: #0f172a;          /* primary page text (dark) */
+}
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+.app-root{background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);}
+body{
+  margin:0;
+  font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: var(--bg);
+  color:var(--text);
+  display:flex;align-items:center;justify-content:center;padding:30px;
+}
+.app-root{max-width:1100px; width:100%;}
+.app-root .bg-white{background:var(--card); color:var(--panel-text)}
+.app-header{padding:28px;border-radius:12px;background:linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));margin-bottom:20px}
+.app-header h1{margin:0;font-size:28px}
+.app-header p{color:var(--muted);margin:6px 0 0}
+main{background:var(--card);padding:20px;border-radius:8px}
+section h2{margin-top:0}
+footer{margin-top:14px;color:var(--muted)}
+
+.header-inner{display:flex;justify-content:space-between;align-items:center;gap:48px}
+.top-nav{display:flex;gap:20px}
+.nav-link{padding:8px 14px;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:700}
+.nav-link.active{background:rgba(37,99,235,0.08);color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+
+.page{padding:18px 6px}
+.card-root{max-width:900px;margin:0 auto}
+.search-layout{display:flex;gap:22px;align-items:stretch}
+.search-form{min-width:300px;display:flex;flex-direction:column;gap:32px;height:100%;justify-content:space-between}
+.search-form label{display:flex;flex-direction:column;color:var(--muted);font-size:14px;margin-bottom:12px}
+/* label with inline icon aligned center */
+.label-with-icon{display:inline-flex;align-items:center;gap:8px}
+.label-with-icon svg{flex-shrink:0}
+.search-form input,.search-form select{padding:10px 12px;border-radius:10px;border:1px solid rgba(15,23,42,0.08);background:var(--card);color:var(--text);margin-top:6px;box-shadow:0 1px 0 rgba(2,6,23,0.03);transition:box-shadow .12s ease, border-color .12s ease}
+.search-form input::placeholder{color:rgba(15,23,42,0.45)}
+.search-form select{appearance:none}
+.search-form input:focus,.search-form select:focus,.page textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 6px 18px rgba(37,99,235,0.08)}
+
+/* Generic rule so other page inputs get the same framed look */
+.page input[type="text"], .page input[type="email"], .page select, .page textarea{padding:10px 12px;border-radius:10px;border:1px solid rgba(15,23,42,0.08);background:var(--card);color:var(--text);box-shadow:0 1px 0 rgba(2,6,23,0.03);transition:box-shadow .12s ease, border-color .12s ease}
+.page input::placeholder, .page textarea::placeholder{color:rgba(15,23,42,0.45)}
+.page input:focus, .page select:focus, .page textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 6px 18px rgba(37,99,235,0.08)}
+.search-preview{flex:1}
+.map-placeholder{height:180px;border-radius:8px;background:linear-gradient(90deg,#eef2ff,#fbf8ff);display:flex;align-items:center;justify-content:center;color:var(--muted);border:1px solid rgba(15,23,42,0.06)}
+
+.form-actions{display:flex;gap:12px;margin-top:0px}
+.btn{padding:8px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
+.btn-ghost{background:transparent;border:2px solid #9aa4b2;color:var(--muted)}
+.btn-primary{background:#55575a;color:white}
+.btn-danger{background:#e11d6b;color:white}
+
+.results-box{margin-top:12px;border:1px solid rgba(15,23,42,0.06);border-radius:8px;background:var(--card);min-height:160px;box-shadow:0 3px 10px rgba(2,6,23,0.04);padding:12px}
+
+/* Actions on DataLoadPage: spread buttons out and add responsive stacking */
+.load-actions{display:flex;align-items:center;gap:24px ; margin-top: 15px;}
+.load-actions .btn{flex-shrink:0}
+@media (max-width:700px){
+  .load-actions{flex-direction:column;align-items:stretch;gap:12px}
+  .load-actions .btn{width:100%}
+}
+
+/* heading/icon alignment for results header */
+.results-header{display:inline-flex;align-items:center;gap:8px}
+.results-header svg{display:block;flex-shrink:0;transform:none;margin-top:0}
+.results-header .results-icon{transform:translateY(0.5px)}
+.results-header span{display:inline-block;line-height:1}
+
+.check-item{display:block;margin:6px 0;color:var(--muted)}
+
+/* Make the main white card areas a consistent height for both pages */
+.bg-white.rounded-2xl.shadow-xl.overflow-hidden{min-height:460px}
+
+/* Ensure the preview/map and result box have consistent sizes across pages */
+.search-preview, .results-box{min-height:180px}
+
+/* Make the search preview (map) taller vertically for better map area */
+.search-preview{min-height:380px;display:flex;flex-direction:column}
+.search-preview .map-placeholder{height:100%;min-height:260px}
+
+/* small screens: reduce map height so layout fits */
+@media (max-width: 800px){
+  .search-preview{min-height:300px}
+  .search-preview .map-placeholder{height:100%;min-height:200px}
+}
