@@ -6,7 +6,7 @@ import { geocodificarDireccion, delay } from "../utils/geocoding";
 import { validarDatosEstacion, type EstacionInsert } from "../../../shared/types";
 
 interface EstacionCV {
-    "TIPO ESTACIÓN": string;  // Nota: Con acento en el JSON original
+    "TIPO ESTACIÓN": string; 
     PROVINCIA: string;
     MUNICIPIO: string;
     "C.POSTAL": number;
@@ -34,13 +34,13 @@ export async function loadCVData() {
         const localidadId = await getOrCreateLocalidad(municipio, provinciaId);
         if (!localidadId) continue;
 
-        // 2. Transformación de TIPO (según Mapping Page 1)
+        // 2. Transformación de TIPO 
         let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
         if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
         else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "Estacion Movil";
         else tipoEstacion = "Otros";
 
-        // 3. Transformación de URL (según Mapping Page 2)
+        // 3. Transformación de URL 
         let url = "https://sitval.com/centros/";
         if (tipoEstacion === "Estacion Movil") {
             url += "movil";
@@ -48,10 +48,10 @@ export async function loadCVData() {
             url += "agricola";
         }
 
-        // 4. Transformación de NOMBRE (según Mapping Page 1)
+        // 4. Transformación de NOMBRE 
         const nombre = `ITV de ${municipio}`;
 
-        // 5. Transformación de DESCRIPCIÓN (según Mapping Page 1)
+        // 5. Transformación de DESCRIPCIÓN 
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
         // 6. Geocodificación de la dirección
@@ -63,7 +63,7 @@ export async function loadCVData() {
             codigoPostal
         );
 
-        // Respetar rate limit de Nominatim (1 request/segundo)
+        // Respetar rate limit de Nominatim
         await delay(1100);
 
         const estacionData: EstacionInsert = {
