@@ -4,9 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "carga": "ts-node src/api/carga.ts",
+    "carga:prueba": "ts-node src/api/carga_prueba.ts",
+    "limpiar": "ts-node src/api/limpiar.ts",
+    "estadisticas": "ts-node -e \"import('./src/api/estadisticas').then(m => m.obtenerEstadisticas())\"",
+    "test:types": "ts-node src/api/testTypes.ts"
   },
   "keywords": [],
   "author": "",
@@ -14,13 +19,18 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.81.0",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/node": "^24.10.0",
+    "@types/node-fetch": "^2.6.13",
+    "@types/xml2js": "^0.4.14",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
