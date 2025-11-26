@@ -3,7 +3,7 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarDatosEstacion, EstacionInsert } from "../../../shared/types";
-import { geocodificarDireccion, delay } from "../utils/geocoding";
+import { geocodificarDireccionSelenium, delay, cerrarNavegador } from "../utils/geocodingSelenium";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -49,15 +49,15 @@ export async function loadCVDataPrueba() {
         const nombre = `ITV de ${municipio}`;
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
-        console.log(`📍 Geocodificando: ${municipio}...`);
-        const coordenadas = await geocodificarDireccion(
+        console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
+        const coordenadas = await geocodificarDireccionSelenium(
             est["DIRECCIÓN"] || "",
             municipio,
             est.PROVINCIA,
             codigoPostal
         );
 
-        await delay(1100);
+        await delay(500);
 
         const estacionData: EstacionInsert = {
             nombre: nombre,
@@ -89,5 +89,6 @@ export async function loadCVDataPrueba() {
         if (error) console.error("❌ Error insertando estación CV:", error.message);
     }
 
+    await cerrarNavegador();
     console.log("✅ [PRUEBA] Datos de Comunidad Valenciana cargados correctamente");
 }

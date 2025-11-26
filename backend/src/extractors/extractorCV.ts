@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { geocodificarDireccion, delay } from "../utils/geocoding";
+import { geocodificarDireccionSelenium, delay, cerrarNavegador } from "../utils/geocodingSelenium";
 import { validarDatosEstacion, type EstacionInsert } from "../../../shared/types";
 
 interface EstacionCV {
@@ -54,17 +54,17 @@ export async function loadCVData() {
         // 5. Transformación de DESCRIPCIÓN 
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
-        // 6. Geocodificación de la dirección
-        console.log(`📍 Geocodificando: ${municipio}...`);
-        const coordenadas = await geocodificarDireccion(
+        // 6. Geocodificación de la dirección usando Selenium
+        console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
+        const coordenadas = await geocodificarDireccionSelenium(
             est["DIRECCIÓN"] || "",
             municipio,
             est.PROVINCIA,
             codigoPostal
         );
 
-        // Respetar rate limit de Nominatim
-        await delay(1100);
+        // Pequeño delay entre búsquedas
+        await delay(500);
 
         const estacionData: EstacionInsert = {
             nombre: `ITV ${municipio} ${est["Nº ESTACIÓN"]}`,
@@ -96,5 +96,7 @@ export async function loadCVData() {
         if (error) console.error("❌ Error insertando estación:", error.message);
     }
 
+    // Cerrar el navegador de Selenium
+    await cerrarNavegador();
     console.log("✅ Datos de Comunidad Valenciana cargados correctamente");
 }
