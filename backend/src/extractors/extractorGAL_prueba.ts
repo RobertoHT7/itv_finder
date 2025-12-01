@@ -4,6 +4,7 @@ import csv from "csv-parser";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { EstacionInsert, validarDatosEstacion } from "../../../shared/types";
+import { validarEstacionCompleta, validarCoordenadas } from "../utils/validator";
 
 // Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
 function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
@@ -47,9 +48,26 @@ export async function loadGALDataPrueba() {
             .pipe(csv({ separator: ";" }))
             .on("data", (row) => results.push(row))
             .on("end", async () => {
-                console.log(`🔄 [PRUEBA] Cargando ${results.length} estaciones de Galicia...`);
+                console.log(`\n${"=".repeat(80)}`);
+                console.log(`🔄 [GALICIA - PRUEBA] Procesando ${results.length} estaciones`);
+                console.log(`${"=".repeat(80)}\n`);
+
+                let estacionesValidas = 0;
+                let estacionesInvalidas = 0;
 
                 for (const est of results) {
+                    // 🔍 PASO 1: VALIDACIÓN PREVIA DE DATOS CRUDOS
+                    const resultadoValidacion = validarEstacionCompleta(est, "Galicia");
+
+                    if (!resultadoValidacion.esValido) {
+                        estacionesInvalidas++;
+                        console.log(`\n🚫 La estación será RECHAZADA y NO se insertará en la base de datos\n`);
+                        continue;
+                    }
+
+                    console.log(`\n✅ Estación válida, procediendo al procesamiento e inserción...\n`);
+
+                    // 🔍 PASO 2: PROCESAMIENTO DE DATOS VALIDADOS
                     const nombreOriginal = est["NOME DA ESTACIÓN"] || est["NOME DA ESTACIN"];
                     const concello = est["CONCELLO"];
                     const provincia = est["PROVINCIA"];
@@ -73,6 +91,16 @@ export async function loadGALDataPrueba() {
                     if (!localidadId) continue;
 
                     const { lat, lon } = parseGalicianCoordinates(coords || "");
+
+                    // Validar coordenadas parseadas
+                    const erroresCoordenadas = validarCoordenadas(lat, lon);
+                    if (erroresCoordenadas.length > 0) {
+                        console.log(`\n⚠️  ADVERTENCIAS DE COORDENADAS:`);
+                        erroresCoordenadas.forEach(err => {
+                            console.log(`   - ${err.campo}: ${err.mensaje}`);
+                        });
+                    }
+
                     const nombre = `Estación ITV ${nombreOriginal}`;
                     const contacto = `Tel: ${telefono || "N/A"} Email: ${email || "N/A"}`;
 
@@ -100,10 +128,23 @@ export async function loadGALDataPrueba() {
                     }
 
                     const { error } = await supabase.from("estacion").insert(estacionData);
-                    if (error) console.error("❌ Error insertando GAL:", error.message);
+                    if (error) {
+                        console.error("❌ Error insertando GAL:", error.message);
+                        estacionesInvalidas++;
+                    } else {
+                        console.log(`✅ Estación insertada correctamente en la base de datos\n`);
+                        estacionesValidas++;
+                    }
                 }
 
-                console.log("✅ [PRUEBA] Datos de Galicia cargados correctamente");
+                console.log(`\n${"=".repeat(80)}`);
+                console.log(`📊 RESUMEN GALICIA`);
+                console.log(`${"=".repeat(80)}`);
+                console.log(`✅ Estaciones válidas insertadas: ${estacionesValidas}`);
+                console.log(`❌ Estaciones rechazadas por errores: ${estacionesInvalidas}`);
+                console.log(`📋 Total procesadas: ${results.length}`);
+                console.log(`${"=".repeat(80)}\n`);
+
                 resolve();
             })
             .on("error", reject);

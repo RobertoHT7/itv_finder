@@ -3,7 +3,8 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarDatosEstacion, EstacionInsert } from "../../../shared/types";
-import { geocodificarDireccion, delay } from "../utils/geocoding";
+import { geocodificarConSelenium, delay } from "../utils/geocoding";
+import { validarEstacionCompleta } from "../utils/validator";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -21,9 +22,26 @@ export async function loadCVDataPrueba() {
     const rawData = fs.readFileSync(filePath, "utf-8");
     const estaciones: EstacionCV[] = JSON.parse(rawData);
 
-    console.log(`🔄 [PRUEBA] Cargando ${estaciones.length} estaciones de Comunidad Valenciana...`);
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`🔄 [COMUNIDAD VALENCIANA - PRUEBA] Procesando ${estaciones.length} estaciones`);
+    console.log(`${"=".repeat(80)}\n`);
+
+    let estacionesValidas = 0;
+    let estacionesInvalidas = 0;
 
     for (const est of estaciones) {
+        // 🔍 PASO 1: VALIDACIÓN PREVIA DE DATOS CRUDOS
+        const resultadoValidacion = validarEstacionCompleta(est, "Comunidad Valenciana");
+
+        if (!resultadoValidacion.esValido) {
+            estacionesInvalidas++;
+            console.log(`\n🚫 La estación será RECHAZADA y NO se insertará en la base de datos\n`);
+            continue;
+        }
+
+        console.log(`\n✅ Estación válida, procediendo a la geocodificación e inserción...\n`);
+
+        // 🔍 PASO 2: PROCESAMIENTO DE DATOS VALIDADOS
         const rawTipo = est["TIPO ESTACIÓN"] || "";
         const municipio = est.MUNICIPIO || est.PROVINCIA || "Desconocido";
         const codigoPostal = est["C.POSTAL"] ? String(est["C.POSTAL"]) : "00000";
@@ -49,13 +67,18 @@ export async function loadCVDataPrueba() {
         const nombre = `ITV de ${municipio}`;
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
-        console.log(`📍 Geocodificando: ${municipio}...`);
-        const coordenadas = await geocodificarDireccion(
-            est["DIRECCIÓN"] || "",
-            municipio,
-            est.PROVINCIA,
-            codigoPostal
-        );
+        let coordenadas: { lat: number; lon: number } | null = null;
+        if (tipoEstacion !== "Estacion Movil") {
+            console.log(`📍 Geocodificando: ${municipio}...`);
+            coordenadas = await geocodificarConSelenium(
+                est["DIRECCIÓN"] || "",
+                municipio,
+                est.PROVINCIA,
+                codigoPostal
+            );
+        } else {
+            console.log(`Estación móvil, se omite geocodificación.`);
+        }
 
         await delay(1100);
 
@@ -86,8 +109,20 @@ export async function loadCVDataPrueba() {
         }
 
         const { error } = await supabase.from("estacion").insert(estacionData);
-        if (error) console.error("❌ Error insertando estación CV:", error.message);
+        if (error) {
+            console.error("❌ Error insertando estación CV:", error.message);
+            estacionesInvalidas++;
+        } else {
+            console.log(`✅ Estación insertada correctamente en la base de datos\n`);
+            estacionesValidas++;
+        }
     }
 
-    console.log("✅ [PRUEBA] Datos de Comunidad Valenciana cargados correctamente");
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`📊 RESUMEN COMUNIDAD VALENCIANA`);
+    console.log(`${"=".repeat(80)}`);
+    console.log(`✅ Estaciones válidas insertadas: ${estacionesValidas}`);
+    console.log(`❌ Estaciones rechazadas por errores: ${estacionesInvalidas}`);
+    console.log(`📋 Total procesadas: ${estaciones.length}`);
+    console.log(`${"=".repeat(80)}\n`);
 }

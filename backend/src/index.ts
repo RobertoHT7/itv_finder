@@ -2,7 +2,6 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
-import { testConnection } from "./api/test";
 import {
     getCVStations,
     getCVStationsByProvincia,
@@ -110,7 +109,7 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, async () => {
     console.clear();
     console.log("==============================================");
-    console.log("    ITV FINDER - Backend Server");
+    console.log("                 ITV FINDER");
     console.log("==============================================\n");
     console.log(`Servidor ejecutandose en el puerto ${PORT}`);
     console.log(`URL: http://localhost:${PORT}\n`);

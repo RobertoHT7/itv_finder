@@ -1,7 +1,8 @@
 import * as readline from "readline";
 import { obtenerEstadisticas, baseDeDatosVacia } from "./estadisticas";
 import { limpiarBaseDeDatos } from "./limpiar";
-import { cargarTodosLosDatos } from "./carga";
+import { cargarTodosLosDatos, cargarCATData, cargarCVData, cargarGALData } from "./carga";
+import { cargarTodosLosDatosPrueba, cargarCATDataPrueba, cargarCVDataPrueba, cargarGALDataPrueba } from "./carga_prueba";
 import { supabase } from "../db/supabaseClient";
 
 // Interfaz para readline
@@ -216,12 +217,43 @@ export async function iniciarMenu() {
                 break;
 
             case "2":
+                console.log("1. Cargar todos los datos");
+                console.log("2. Cargar todos los datos de prueba");
+                console.log("3. Cargar datos de prueba de valencia");
+                console.log("4. Cargar datos de prueba de cataluña");
+                console.log("5. Cargar datos de prueba de galicia");
                 const confirmCargar = await pregunta(
-                    "\nEstas seguro de que quieres cargar datos? (s/n): "
+                    "\n Que datos quieres cargar?: "
                 );
-                if (confirmCargar.toLowerCase() === "s") {
-                    await cargarTodosLosDatos();
-                    await obtenerEstadisticas();
+                let confirmContinuar: string;
+                switch (confirmCargar) {
+                    case "1":
+                        console.log("\nCargando los datos (ETL completo)...");
+
+                        await cargarTodosLosDatos();
+                        await obtenerEstadisticas();
+                        break;
+                    case "2":
+                        console.log("\nCargando todos los datos de prueba ...");
+                        await cargarTodosLosDatosPrueba();
+
+                        await obtenerEstadisticas();
+                        break;
+                    case "3":
+                        console.log("\nCargando los datos de prueba de valencia ...");
+                        await cargarCVDataPrueba();
+                        break
+                    case "4":
+                        console.log("\nCargando los datos de prueba de cataluña ...");
+                        await cargarCATDataPrueba();
+                        break
+                    case "5":
+                        console.log("\nCargando los datos de prueba de galicia ...");
+                        await cargarGALDataPrueba();
+                        break
+
+                    default:
+                        console.log("\nOpcion no valida. Por favor, selecciona una opcion del 1 al 2.\n");
                 }
                 break;
 

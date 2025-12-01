@@ -28,6 +28,36 @@ export async function cargarTodosLosDatos() {
     }
 }
 
+export async function cargarCVData() {
+    console.log("\nCargando datos de la Comunidad Valenciana...");
+    console.log("==========================================\n");
+    try {
+        await loadCVData();
+    } catch (error) {
+        console.error("Error cargando datos de la Comunidad Valenciana:", error);
+    }
+}
+
+export async function cargarGALData() {
+    console.log("\nCargando datos de Galicia...");
+    console.log("==========================================\n");
+    try {
+        await loadGALData();
+    } catch (error) {
+        console.error("Error cargando datos de Galicia:", error);
+    }
+}
+
+export async function cargarCATData() {
+    console.log("\nCargando datos de Cataluña...");
+    console.log("==========================================\n");
+    try {
+        await loadCATData();
+    } catch (error) {
+        console.error("Error cargando datos de Cataluña:", error);
+    }
+}
+
 // Si se ejecuta directamente desde la línea de comandos
 if (require.main === module) {
     cargarTodosLosDatos()
