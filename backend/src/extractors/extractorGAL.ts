@@ -15,7 +15,7 @@ function parseGalicianCoordinates(coordString: string): { lat: number, lon: numb
 
     if (parts.length !== 2) return { lat: 0, lon: 0 };
 
-    // Caso 1: Formato Grados Minutos (e.g., 43° 18.856)
+    // Caso 1: Formato Grados Minutos
     if (parts[0].includes("°")) {
         const parseDM = (str: string) => {
             // Extraer el signo
@@ -84,13 +84,13 @@ export async function loadGALData() {
                     // Parseo de coordenadas
                     const { lat, lon } = parseGalicianCoordinates(coords || "");
 
-                    // Transformación de NOMBRE (Mapping Page 2)
+                    // Transformación de NOMBRE 
                     const nombre = `Estación ITV ${nombreOriginal}`;
 
-                    // Transformación de CONTACTO (Mapping Page 3)
+                    // Transformación de CONTACTO 
                     const contacto = `Tel: ${telefono || "N/A"} Email: ${email || "N/A"}`;
 
-                    // Transformación de TIPO (Mapping Page 2 - Asumimos Fija por defecto según CSV)
+                    // Transformación de TIPO 
                     let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
                     if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "Estacion Movil";
 

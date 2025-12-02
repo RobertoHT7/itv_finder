@@ -19,6 +19,8 @@
   "license": "ISC",
   "dependencies": {
     "@supabase/supabase-js": "^2.81.0",
+    "@types/selenium-webdriver": "^4.35.4",
+    "chromedriver": "^142.0.3",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",

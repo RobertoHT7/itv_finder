@@ -13,12 +13,12 @@ export async function cargarTodosLosDatos() {
     try {
         console.log("Comunidad Valenciana...");
         await loadCVData();
+       
+        // console.log("\nGalicia...");
+        // await loadGALData();
 
-        console.log("\nGalicia...");
-        await loadGALData();
-
-        console.log("\nCataluna...");
-        await loadCATData();
+        // console.log("\nCataluna...");
+        // await loadCATData();
 
         console.log("\nProceso ETL completo y datos cargados en Supabase\n");
         return { success: true };

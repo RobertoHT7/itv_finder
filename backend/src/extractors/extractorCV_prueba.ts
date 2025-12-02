@@ -80,7 +80,7 @@ export async function loadCVDataPrueba() {
             console.log(`Estación móvil, se omite geocodificación.`);
         }
 
-        await delay(1100);
+        await delay(500);
 
         const estacionData: EstacionInsert = {
             nombre: nombre,
