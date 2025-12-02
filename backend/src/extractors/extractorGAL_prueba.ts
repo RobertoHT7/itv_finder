@@ -3,8 +3,7 @@ import path from "path";
 import csv from "csv-parser";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { EstacionInsert, validarDatosEstacion } from "../../../shared/types";
-import { validarEstacionCompleta, validarCoordenadas } from "../utils/validator";
+import { validarYCorregirEstacion } from "../utils/validator";
 
 // Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
 function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
@@ -52,22 +51,12 @@ export async function loadGALDataPrueba() {
                 console.log(`🔄 [GALICIA - PRUEBA] Procesando ${results.length} estaciones`);
                 console.log(`${"=".repeat(80)}\n`);
 
-                let estacionesValidas = 0;
-                let estacionesInvalidas = 0;
+                let cargadas = 0;
+                let rechazadas = 0;
+                let corregidas = 0;
 
                 for (const est of results) {
-                    // 🔍 PASO 1: VALIDACIÓN PREVIA DE DATOS CRUDOS
-                    const resultadoValidacion = validarEstacionCompleta(est, "Galicia");
-
-                    if (!resultadoValidacion.esValido) {
-                        estacionesInvalidas++;
-                        console.log(`\n🚫 La estación será RECHAZADA y NO se insertará en la base de datos\n`);
-                        continue;
-                    }
-
-                    console.log(`\n✅ Estación válida, procediendo al procesamiento e inserción...\n`);
-
-                    // 🔍 PASO 2: PROCESAMIENTO DE DATOS VALIDADOS
+                    // Mapeo de claves con posibles caracteres extraños por encoding
                     const nombreOriginal = est["NOME DA ESTACIÓN"] || est["NOME DA ESTACIN"];
                     const concello = est["CONCELLO"];
                     const provincia = est["PROVINCIA"];
@@ -80,25 +69,54 @@ export async function loadGALDataPrueba() {
                     const horario = est["HORARIO"];
 
                     if (!nombreOriginal || !concello || !provincia) {
-                        console.warn("⚠️ Fila incompleta (falta nombre, concello o provincia), saltando...");
+                        console.warn("⚠️ Fila incompleta (falta nombre, concello o provincia), saltando...\n");
+                        rechazadas++;
                         continue;
                     }
 
-                    const provinciaId = await getOrCreateProvincia(provincia);
-                    if (!provinciaId) continue;
-
-                    const localidadId = await getOrCreateLocalidad(concello, provinciaId);
-                    if (!localidadId) continue;
-
+                    // Parseo de coordenadas
                     const { lat, lon } = parseGalicianCoordinates(coords || "");
 
-                    // Validar coordenadas parseadas
-                    const erroresCoordenadas = validarCoordenadas(lat, lon);
-                    if (erroresCoordenadas.length > 0) {
-                        console.log(`\n⚠️  ADVERTENCIAS DE COORDENADAS:`);
-                        erroresCoordenadas.forEach(err => {
-                            console.log(`   - ${err.campo}: ${err.mensaje}`);
-                        });
+                    // Preparar datos para validación
+                    const datosEstacion = {
+                        "NOME DA ESTACIÓN": nombreOriginal,
+                        CONCELLO: concello,
+                        PROVINCIA: provincia,
+                        ENDEREZO: direccion,
+                        "CÓDIGO POSTAL": cp,
+                        "COORDENADAS GMAPS": coords,
+                        latitud: lat,
+                        longitud: lon
+                    };
+
+                    // 🔍 VALIDAR Y CORREGIR DATOS
+                    const validacion = validarYCorregirEstacion(datosEstacion, "Galicia");
+
+                    if (!validacion.esValido) {
+                        rechazadas++;
+                        console.log(`\n🚫 Estación rechazada por errores críticos\n`);
+                        continue;
+                    }
+
+                    if (validacion.advertencias.length > 0) {
+                        corregidas++;
+                    }
+
+                    console.log(`\n✅ Estación validada, procediendo al procesamiento e inserción...\n`);
+
+                    // Usar datos corregidos
+                    const datos = validacion.datosCorregidos;
+
+                    const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+                    if (!provinciaId) {
+                        rechazadas++;
+                        continue;
+                    }
+
+                    const localidadId = await getOrCreateLocalidad(datos.MUNICIPIO || concello, provinciaId);
+                    if (!localidadId) {
+                        rechazadas++;
+                        continue;
                     }
 
                     const nombre = `Estación ITV ${nombreOriginal}`;
@@ -107,11 +125,11 @@ export async function loadGALDataPrueba() {
                     let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
                     if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "Estacion Movil";
 
-                    const estacionData: EstacionInsert = {
+                    const estacionData = {
                         nombre: nombre,
                         tipo: tipoEstacion,
                         direccion: direccion || "Sin dirección",
-                        codigo_postal: cp || "00000",
+                        codigo_postal: datos["C.POSTAL"],
                         latitud: lat,
                         longitud: lon,
                         descripcion: `Estación ITV de ${concello}`,
@@ -121,28 +139,23 @@ export async function loadGALDataPrueba() {
                         localidadId,
                     };
 
-                    const errores = validarDatosEstacion(estacionData);
-                    if (errores.length > 0) {
-                        console.error(`❌ Datos inválidos para ${concello}:`, errores);
-                        continue;
-                    }
-
                     const { error } = await supabase.from("estacion").insert(estacionData);
                     if (error) {
                         console.error("❌ Error insertando GAL:", error.message);
-                        estacionesInvalidas++;
+                        rechazadas++;
                     } else {
                         console.log(`✅ Estación insertada correctamente en la base de datos\n`);
-                        estacionesValidas++;
+                        cargadas++;
                     }
                 }
 
                 console.log(`\n${"=".repeat(80)}`);
-                console.log(`📊 RESUMEN GALICIA`);
+                console.log(`📊 RESUMEN GALICIA - PRUEBA`);
                 console.log(`${"=".repeat(80)}`);
-                console.log(`✅ Estaciones válidas insertadas: ${estacionesValidas}`);
-                console.log(`❌ Estaciones rechazadas por errores: ${estacionesInvalidas}`);
-                console.log(`📋 Total procesadas: ${results.length}`);
+                console.log(`✅ Estaciones cargadas: ${cargadas}`);
+                console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+                console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+                console.log(`📝 Total procesadas: ${results.length}`);
                 console.log(`${"=".repeat(80)}\n`);
 
                 resolve();

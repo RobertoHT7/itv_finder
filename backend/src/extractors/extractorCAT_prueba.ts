@@ -3,8 +3,36 @@ import path from "path";
 import { parseStringPromise } from "xml2js";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { EstacionInsert, validarDatosEstacion } from "../../../shared/types";
-import { validarEstacionCompleta, validarCoordenadas } from "../utils/validator";
+import { validarYCorregirEstacion } from "../utils/validator";
+
+// Función para normalizar coordenadas al rango correcto de España
+function normalizarCoordenada(valor: number, esLatitud: boolean): number {
+    if (valor === 0) return 0;
+    
+    // Rangos válidos para España
+    const rangoLat = { min: 27, max: 44 };
+    const rangoLon = { min: -19, max: 5 };
+    
+    const rango = esLatitud ? rangoLat : rangoLon;
+    
+    // Mantener el signo original
+    const signo = valor < 0 ? -1 : 1;
+    const valorAbs = Math.abs(valor);
+    
+    // Probar diferentes divisores hasta encontrar uno que esté en el rango
+    const divisores = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
+    
+    for (const divisor of divisores) {
+        const resultado = (valorAbs / divisor) * signo;
+        if (resultado >= rango.min && resultado <= rango.max) {
+            return resultado;
+        }
+    }
+    
+    // Si ningún divisor funciona, devolver 0 (coordenada inválida)
+    console.warn(`⚠️ No se pudo normalizar coordenada ${valor} (${esLatitud ? 'lat' : 'lon'})`);
+    return 0;
+}
 
 export async function loadCATDataPrueba() {
     const filePath = path.join(__dirname, "../../data_prueba/ITV-CAT.xml");
@@ -17,48 +45,76 @@ export async function loadCATDataPrueba() {
     console.log(`🔄 [CATALUÑA - PRUEBA] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);
 
-    let estacionesValidas = 0;
-    let estacionesInvalidas = 0;
+    let cargadas = 0;
+    let rechazadas = 0;
+    let corregidas = 0;
 
     for (const est of estaciones) {
-        // 🔍 PASO 1: VALIDACIÓN PREVIA DE DATOS CRUDOS
-        const resultadoValidacion = validarEstacionCompleta(est, "Cataluña");
+        const denominacio = est.denominaci?.[0];
+        const municipi = est.municipi?.[0];
+        const provinciaRaw = est.serveis_territorials?.[0];
+        const operador = est.operador?.[0];
+        
+        // Extraer nombre de provincia limpio (ej: "Serveis Territorials de Tarragona" → "Tarragona")
+        let provincia = provinciaRaw;
+        if (provinciaRaw && provinciaRaw.includes(" de ")) {
+            const partes = provinciaRaw.split(" de ");
+            provincia = partes[partes.length - 1].trim();
+        }
 
-        if (!resultadoValidacion.esValido) {
-            estacionesInvalidas++;
-            console.log(`\n🚫 La estación será RECHAZADA y NO se insertará en la base de datos\n`);
+        if (!municipi || !provincia) {
+            console.warn("⚠️ Punto incompleto en XML, saltando...\n");
+            rechazadas++;
             continue;
         }
 
-        console.log(`\n✅ Estación válida, procediendo al procesamiento e inserción...\n`);
+        const latRaw = est.lat?.[0] ? parseFloat(est.lat[0]) : 0;
+        const lonRaw = est.long?.[0] ? parseFloat(est.long[0]) : 0;
+        const latitud = normalizarCoordenada(latRaw, true);
+        const longitud = normalizarCoordenada(lonRaw, false);
+        const cp = est.cp?.[0] || "";
 
-        // 🔍 PASO 2: PROCESAMIENTO DE DATOS VALIDADOS
-        const denominacio = est.denominaci?.[0];
-        const municipi = est.municipi?.[0];
-        const provincia = est.serveis_territorials?.[0];
-        const operador = est.operador?.[0];
+        // Preparar datos para validación
+        const datosEstacion = {
+            denominaci: denominacio,
+            municipi: municipi,
+            provincia: provincia,
+            cp: cp,
+            latitud: latitud,
+            longitud: longitud
+        };
 
-        if (!municipi || !provincia) continue;
+        // 🔍 VALIDAR Y CORREGIR DATOS
+        const validacion = validarYCorregirEstacion(datosEstacion, "Cataluña");
 
-        const provinciaId = await getOrCreateProvincia(provincia);
-        if (!provinciaId) continue;
+        if (!validacion.esValido) {
+            rechazadas++;
+            console.log(`\n🚫 Estación rechazada por errores críticos\n`);
+            continue;
+        }
 
-        const localidadId = await getOrCreateLocalidad(municipi, provinciaId);
-        if (!localidadId) continue;
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
+        }
+
+        console.log(`\n✅ Estación validada, procediendo al procesamiento e inserción...\n`);
+
+        // Usar datos corregidos
+        const datos = validacion.datosCorregidos;
+
+        const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+        if (!provinciaId) {
+            rechazadas++;
+            continue;
+        }
+
+        const localidadId = await getOrCreateLocalidad(datos.MUNICIPIO || municipi, provinciaId);
+        if (!localidadId) {
+            rechazadas++;
+            continue;
+        }
 
         const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
-
-        const latitud = est.lat?.[0] ? parseFloat(est.lat[0]) / 1e6 : 0;
-        const longitud = est.long?.[0] ? parseFloat(est.long[0]) / 1e6 : 0;
-
-        // Validar coordenadas parseadas
-        const erroresCoordenadas = validarCoordenadas(latitud, longitud);
-        if (erroresCoordenadas.length > 0) {
-            console.log(`\n⚠️  ADVERTENCIAS DE COORDENADAS:`);
-            erroresCoordenadas.forEach(err => {
-                console.log(`   - ${err.campo}: ${err.mensaje}`);
-            });
-        }
 
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
         const nombre = `ITV de ${municipi}`;
@@ -68,11 +124,11 @@ export async function loadCATDataPrueba() {
             contacto = "https://www.applusiteuve.com/es-es/contacto-itv-responde/itv-responde/";
         }
 
-        const estacionData: EstacionInsert = {
+        const estacionData = {
             nombre: nombre,
             tipo: tipoEstacion,
             direccion: est.adre_a?.[0] || "Sin dirección",
-            codigo_postal: est.cp?.[0] || "00000",
+            codigo_postal: datos["C.POSTAL"],
             latitud,
             longitud,
             descripcion: descripcion,
@@ -82,27 +138,23 @@ export async function loadCATDataPrueba() {
             localidadId,
         };
 
-        const errores = validarDatosEstacion(estacionData);
-        if (errores.length > 0) {
-            console.error(`❌ Datos inválidos para ${denominacio}:`, errores);
-            continue;
-        }
-
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando CAT:", error.message);
-            estacionesInvalidas++;
+            rechazadas++;
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
-            estacionesValidas++;
+            cargadas++;
         }
     }
 
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`📊 RESUMEN CATALUÑA`);
+    console.log(`📊 RESUMEN CATALUÑA - PRUEBA`);
     console.log(`${"=".repeat(80)}`);
-    console.log(`✅ Estaciones válidas insertadas: ${estacionesValidas}`);
-    console.log(`❌ Estaciones rechazadas por errores: ${estacionesInvalidas}`);
-    console.log(`📋 Total procesadas: ${estaciones.length}`);
+    console.log(`✅ Estaciones cargadas: ${cargadas}`);
+    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`📝 Total procesadas: ${estaciones.length}`);
+    console.log(`${"=".repeat(80)}\n`);
     console.log(`${"=".repeat(80)}\n`);
 }

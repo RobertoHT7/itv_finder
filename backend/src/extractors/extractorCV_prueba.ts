@@ -2,9 +2,8 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { validarDatosEstacion, EstacionInsert } from "../../../shared/types";
-import { geocodificarConSelenium, delay } from "../utils/geocoding";
-import { validarEstacionCompleta } from "../utils/validator";
+import { validarYCorregirEstacion } from "../utils/validator";
+import { geocodificarConSelenium, delay, cerrarNavegador } from "../utils/geocodingSelenium";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -26,31 +25,43 @@ export async function loadCVDataPrueba() {
     console.log(`🔄 [COMUNIDAD VALENCIANA - PRUEBA] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);
 
-    let estacionesValidas = 0;
-    let estacionesInvalidas = 0;
+    let cargadas = 0;
+    let rechazadas = 0;
+    let corregidas = 0;
 
     for (const est of estaciones) {
-        // 🔍 PASO 1: VALIDACIÓN PREVIA DE DATOS CRUDOS
-        const resultadoValidacion = validarEstacionCompleta(est, "Comunidad Valenciana");
+        // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS
+        const validacion = validarYCorregirEstacion(est, "Comunidad Valenciana");
 
-        if (!resultadoValidacion.esValido) {
-            estacionesInvalidas++;
-            console.log(`\n🚫 La estación será RECHAZADA y NO se insertará en la base de datos\n`);
+        if (!validacion.esValido) {
+            rechazadas++;
+            console.log(`\n🚫 La estación será RECHAZADA por errores críticos\n`);
             continue;
         }
 
-        console.log(`\n✅ Estación válida, procediendo a la geocodificación e inserción...\n`);
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
+        }
 
-        // 🔍 PASO 2: PROCESAMIENTO DE DATOS VALIDADOS
+        console.log(`\n✅ Estación validada, procediendo a la geocodificación e inserción...\n`);
+
+        // 🔍 PROCESAMIENTO CON DATOS CORREGIDOS
+        const datos = validacion.datosCorregidos;
         const rawTipo = est["TIPO ESTACIÓN"] || "";
-        const municipio = est.MUNICIPIO || est.PROVINCIA || "Desconocido";
-        const codigoPostal = est["C.POSTAL"] ? String(est["C.POSTAL"]) : "00000";
+        const municipio = datos.MUNICIPIO || datos.PROVINCIA || "Desconocido";
+        const codigoPostal = datos["C.POSTAL"];
 
-        const provinciaId = await getOrCreateProvincia(est.PROVINCIA);
-        if (!provinciaId) continue;
+        const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+        if (!provinciaId) {
+            rechazadas++;
+            continue;
+        }
 
         const localidadId = await getOrCreateLocalidad(municipio, provinciaId);
-        if (!localidadId) continue;
+        if (!localidadId) {
+            rechazadas++;
+            continue;
+        }
 
         let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
         if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
@@ -82,7 +93,7 @@ export async function loadCVDataPrueba() {
 
         await delay(500);
 
-        const estacionData: EstacionInsert = {
+        const estacionData = {
             nombre: nombre,
             tipo: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
@@ -102,27 +113,24 @@ export async function loadCVDataPrueba() {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
         }
 
-        const errores = validarDatosEstacion(estacionData);
-        if (errores.length > 0) {
-            console.error(`❌ Datos inválidos para ${municipio}:`, errores);
-            continue;
-        }
-
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando estación CV:", error.message);
-            estacionesInvalidas++;
+            rechazadas++;
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
-            estacionesValidas++;
+            cargadas++;
         }
     }
 
+    await cerrarNavegador();
+
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`📊 RESUMEN COMUNIDAD VALENCIANA`);
+    console.log(`📊 RESUMEN COMUNIDAD VALENCIANA - PRUEBA`);
     console.log(`${"=".repeat(80)}`);
-    console.log(`✅ Estaciones válidas insertadas: ${estacionesValidas}`);
-    console.log(`❌ Estaciones rechazadas por errores: ${estacionesInvalidas}`);
-    console.log(`📋 Total procesadas: ${estaciones.length}`);
+    console.log(`✅ Estaciones cargadas: ${cargadas}`);
+    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
 }

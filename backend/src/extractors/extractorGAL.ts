@@ -3,7 +3,7 @@ import path from "path";
 import csv from "csv-parser";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { validarDatosEstacion, type EstacionInsert, type TipoEstacion } from "../../../shared/types";
+import { validarYCorregirEstacion } from "../utils/validator";
 
 // Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
 function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
@@ -54,7 +54,11 @@ export async function loadGALData() {
             .pipe(csv({ separator: ";" }))
             .on("data", (row) => results.push(row))
             .on("end", async () => {
-                console.log(`🔄 Cargando ${results.length} estaciones de Galicia...`);
+                console.log(`\n🔄 Cargando ${results.length} estaciones de Galicia...`);
+                
+                let cargadas = 0;
+                let rechazadas = 0;
+                let corregidas = 0;
 
                 for (const est of results) {
                     // Mapeo de claves con posibles caracteres extraños por encoding
@@ -69,17 +73,52 @@ export async function loadGALData() {
                     const web = est["SOLICITUDE DE CITA PREVIA"];
                     const horario = est["HORARIO"];
 
-                    // Validar datos obligatorios
+                    // Validar datos obligatorios básicos
                     if (!nombreOriginal || !concello || !provincia) {
-                        console.warn("Fila incompleta (falta nombre, concello o provincia), saltando...");
+                        console.warn("⚠️ Fila incompleta (falta nombre, concello o provincia), saltando...\n");
+                        rechazadas++;
                         continue;
                     }
 
-                    const provinciaId = await getOrCreateProvincia(provincia);
-                    if (!provinciaId) continue;
+                    // Preparar datos para validación
+                    const datosEstacion = {
+                        "NOME DA ESTACIÓN": nombreOriginal,
+                        CONCELLO: concello,
+                        PROVINCIA: provincia,
+                        ENDEREZO: direccion,
+                        "CÓDIGO POSTAL": cp,
+                        "COORDENADAS GMAPS": coords,
+                        latitud: 0,
+                        longitud: 0
+                    };
 
-                    const localidadId = await getOrCreateLocalidad(concello, provinciaId);
-                    if (!localidadId) continue;
+                    // VALIDAR Y CORREGIR DATOS
+                    const validacion = validarYCorregirEstacion(datosEstacion, "Galicia");
+                    
+                    if (!validacion.esValido) {
+                        rechazadas++;
+                        console.log(`⛔ Estación rechazada por errores críticos\n`);
+                        continue;
+                    }
+
+                    if (validacion.advertencias.length > 0) {
+                        corregidas++;
+                    }
+
+                    // Usar datos corregidos
+                    const datos = validacion.datosCorregidos;
+
+                    const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+                    if (!provinciaId) {
+                        rechazadas++;
+                        continue;
+                    }
+
+                    const localidadId = await getOrCreateLocalidad(datos.MUNICIPIO || concello, provinciaId);
+                    if (!localidadId) {
+                        rechazadas++;
+                        continue;
+                    }
 
                     // Parseo de coordenadas
                     const { lat, lon } = parseGalicianCoordinates(coords || "");
@@ -94,11 +133,11 @@ export async function loadGALData() {
                     let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
                     if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "Estacion Movil";
 
-                    const estacionData: EstacionInsert = {
+                    const estacionData = {
                         nombre: nombre,
                         tipo: tipoEstacion,
                         direccion: direccion || "Sin dirección",
-                        codigo_postal: cp || "00000",
+                        codigo_postal: datos["C.POSTAL"],
                         latitud: lat,
                         longitud: lon,
                         descripcion: `Estación ITV de ${concello}`,
@@ -108,17 +147,23 @@ export async function loadGALData() {
                         localidadId,
                     };
 
-                    const errores = validarDatosEstacion(estacionData);
-                    if (errores.length > 0) {
-                        console.error(`❌ Datos inválidos para ${concello}:`, errores);
-                        continue;
-                    }
-
                     const { error } = await supabase.from("estacion").insert(estacionData);
-                    if (error) console.error("❌ Error insertando GAL:", error.message);
+                    if (error) {
+                        console.error("❌ Error insertando GAL:", error.message);
+                        rechazadas++;
+                    } else {
+                        cargadas++;
+                    }
                 }
 
-                console.log("✅ Datos de Galicia cargados correctamente");
+                console.log("\n" + "=".repeat(70));
+                console.log("📊 RESUMEN DE CARGA - GALICIA");
+                console.log("=".repeat(70));
+                console.log(`✅ Estaciones cargadas: ${cargadas}`);
+                console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+                console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+                console.log(`📝 Total procesadas: ${results.length}`);
+                console.log("=".repeat(70) + "\n");
                 resolve();
             })
             .on("error", reject);

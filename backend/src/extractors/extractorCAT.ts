@@ -3,7 +3,36 @@ import path from "path";
 import { parseStringPromise } from "xml2js";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { validarDatosEstacion, type EstacionInsert, type TipoEstacion } from "../../../shared/types";
+import { validarYCorregirEstacion } from "../utils/validator";
+
+// Función para normalizar coordenadas al rango correcto de España
+function normalizarCoordenada(valor: number, esLatitud: boolean): number {
+    if (valor === 0) return 0;
+    
+    // Rangos válidos para España
+    const rangoLat = { min: 27, max: 44 };
+    const rangoLon = { min: -19, max: 5 };
+    
+    const rango = esLatitud ? rangoLat : rangoLon;
+    
+    // Mantener el signo original
+    const signo = valor < 0 ? -1 : 1;
+    const valorAbs = Math.abs(valor);
+    
+    // Probar diferentes divisores hasta encontrar uno que esté en el rango
+    const divisores = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
+    
+    for (const divisor of divisores) {
+        const resultado = (valorAbs / divisor) * signo;
+        if (resultado >= rango.min && resultado <= rango.max) {
+            return resultado;
+        }
+    }
+    
+    // Si ningún divisor funciona, devolver 0 (coordenada inválida)
+    console.warn(`⚠️ No se pudo normalizar coordenada ${valor} (${esLatitud ? 'lat' : 'lon'})`);
+    return 0;
+}
 
 export async function loadCATData() {
     const filePath = path.join(__dirname, "../../data/ITV-CAT.xml");
@@ -13,49 +42,99 @@ export async function loadCATData() {
     // Ajuste al path correcto del XML proporcionado
     const estaciones = json.response?.row?.[0]?.row || [];
 
-    console.log(`🔄 Cargando ${estaciones.length} estaciones de Cataluña...`);
+    console.log(`\n🔄 Cargando ${estaciones.length} estaciones de Cataluña...`);
+    
+    let cargadas = 0;
+    let rechazadas = 0;
+    let corregidas = 0;
 
     for (const est of estaciones) {
         // Acceso a campos XML (vienen como arrays de 1 elemento)
         const denominacio = est.denominaci?.[0];
         const municipi = est.municipi?.[0];
-        const provincia = est.serveis_territorials?.[0];
+        const provinciaRaw = est.serveis_territorials?.[0];
         const operador = est.operador?.[0];
+        
+        // Extraer nombre de provincia limpio (ej: "Serveis Territorials de Tarragona" → "Tarragona")
+        let provincia = provinciaRaw;
+        if (provinciaRaw && provinciaRaw.includes(" de ")) {
+            const partes = provinciaRaw.split(" de ");
+            provincia = partes[partes.length - 1].trim();
+        }
 
-        if (!municipi || !provincia) continue;
+        if (!municipi || !provincia) {
+            console.warn("⚠️ Punto incompleto en XML, saltando...\n");
+            rechazadas++;
+            continue;
+        }
 
-        const provinciaId = await getOrCreateProvincia(provincia);
-        if (!provinciaId) continue;
+        // Coordenadas (normalizar automáticamente al rango de España)
+        const latRaw = est.lat?.[0] ? parseFloat(est.lat[0]) : 0;
+        const lonRaw = est.long?.[0] ? parseFloat(est.long[0]) : 0;
+        const latitud = normalizarCoordenada(latRaw, true);
+        const longitud = normalizarCoordenada(lonRaw, false);
+        const cp = est.cp?.[0] || "";
 
-        const localidadId = await getOrCreateLocalidad(municipi, provinciaId);
-        if (!localidadId) continue;
+        // Preparar datos para validación
+        const datosEstacion = {
+            denominaci: denominacio,
+            municipi: municipi,
+            provincia: provincia,
+            cp: cp,
+            latitud: latitud,
+            longitud: longitud
+        };
 
-        // 1. Transformación de TIPO (Mapping Page 4: Asignar valor fijo "Estación_fija")
+        // VALIDAR Y CORREGIR DATOS
+        const validacion = validarYCorregirEstacion(datosEstacion, "Cataluña");
+        
+        if (!validacion.esValido) {
+            rechazadas++;
+            console.log(`⛔ Estación rechazada por errores críticos\n`);
+            continue;
+        }
+
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
+        }
+
+        // Usar datos corregidos
+        const datos = validacion.datosCorregidos;
+
+        const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+        if (!provinciaId) {
+            rechazadas++;
+            continue;
+        }
+
+        const localidadId = await getOrCreateLocalidad(datos.MUNICIPIO || municipi, provinciaId);
+        if (!localidadId) {
+            rechazadas++;
+            continue;
+        }
+
+        // Transformación de TIPO (Mapping Page 4: Asignar valor fijo "Estación_fija")
         const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
 
-        // 2. Coordenadas (Dividir por 1e6)
-        const latitud = est.lat?.[0] ? parseFloat(est.lat[0]) / 1e6 : 0;
-        const longitud = est.long?.[0] ? parseFloat(est.long[0]) / 1e6 : 0;
-
-        // 3. Transformación de DESCRIPCIÓN
+        // Transformación de DESCRIPCIÓN
         // "Juntar estos 3 campos XML: denominaci + " - " + municipi + " (" + operador + ")"
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
 
-        // 4. Transformación de NOMBRE
+        // Transformación de NOMBRE
         const nombre = `ITV de ${municipi}`;
 
-        // 5. Transformación de CONTACTO
+        // Transformación de CONTACTO
         // "Si empieza por https: -> Reemplazar por URL específica"
         let contacto = est.correu_electr_nic?.[0] || "Sin contacto";
         if (contacto.startsWith("https") || contacto.startsWith("http")) {
             contacto = "https://www.applusiteuve.com/es-es/contacto-itv-responde/itv-responde/";
         }
 
-        const estacionData: EstacionInsert = {
+        const estacionData = {
             nombre: nombre,
             tipo: tipoEstacion,
             direccion: est.adre_a?.[0] || "Sin dirección",
-            codigo_postal: est.cp?.[0] || "00000",
+            codigo_postal: datos["C.POSTAL"],
             latitud,
             longitud,
             descripcion: descripcion,
@@ -65,15 +144,21 @@ export async function loadCATData() {
             localidadId,
         };
 
-        const errores = validarDatosEstacion(estacionData);
-        if (errores.length > 0) {
-            console.error(`❌ Datos inválidos para ${est.denominaci?.[0]}:`, errores);
-            continue;
+        const { error } = await supabase.from("estacion").insert(estacionData);
+        if (error) {
+            console.error("❌ Error insertando CAT:", error.message);
+            rechazadas++;
+        } else {
+            cargadas++;
         }
-
-        const { error } = await supabase.from("estacion").insert(estacionData as any);
-        if (error) console.error("❌ Error insertando CAT:", error.message);
     }
 
-    console.log("✅ Datos de Cataluña cargados correctamente");
+    console.log("\n" + "=".repeat(70));
+    console.log("📊 RESUMEN DE CARGA - CATALUÑA");
+    console.log("=".repeat(70));
+    console.log(`✅ Estaciones cargadas: ${cargadas}`);
+    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`📝 Total procesadas: ${estaciones.length}`);
+    console.log("=".repeat(70) + "\n");
 }

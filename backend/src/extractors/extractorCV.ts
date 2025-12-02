@@ -3,8 +3,9 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
+import { cerrarNavegador } from "../utils/geocodingSelenium";
 import { SELENIUM_CONFIG } from "../utils/seleniumConfig";
-import { validarDatosEstacion, type EstacionInsert } from "../../../shared/types";
+import { validarYCorregirEstacion } from "../utils/validator";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -22,18 +23,44 @@ export async function loadCVData() {
     const rawData = fs.readFileSync(filePath, "utf-8");
     const estaciones: EstacionCV[] = JSON.parse(rawData);
 
-    console.log(`🔄 Cargando ${estaciones.length} estaciones de Comunidad Valenciana...`);
+    console.log(`\n🔄 Cargando ${estaciones.length} estaciones de Comunidad Valenciana...`);
+    
+    let cargadas = 0;
+    let rechazadas = 0;
+    let corregidas = 0;
 
     for (const est of estaciones) {
-        const rawTipo = est["TIPO ESTACIÓN"] || "";
-        const municipio = est.MUNICIPIO || est.PROVINCIA || "Desconocido"; // Si no hay municipio, usar provincia
-        const codigoPostal = est["C.POSTAL"] ? String(est["C.POSTAL"]) : "00000";
+        // VALIDAR Y CORREGIR DATOS
+        const validacion = validarYCorregirEstacion(est, "Comunidad Valenciana");
+        
+        if (!validacion.esValido) {
+            rechazadas++;
+            console.log(`⛔ Estación rechazada por errores críticos\n`);
+            continue;
+        }
 
-        const provinciaId = await getOrCreateProvincia(est.PROVINCIA);
-        if (!provinciaId) continue;
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
+        }
+
+        // Usar datos corregidos
+        const datos = validacion.datosCorregidos;
+        
+        const rawTipo = datos["TIPO ESTACIÓN"] || est["TIPO ESTACIÓN"] || "";
+        const municipio = datos.MUNICIPIO || datos.PROVINCIA;
+        const codigoPostal = datos["C.POSTAL"];
+
+        const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
+        if (!provinciaId) {
+            rechazadas++;
+            continue;
+        }
 
         const localidadId = await getOrCreateLocalidad(municipio, provinciaId);
-        if (!localidadId) continue;
+        if (!localidadId) {
+            rechazadas++;
+            continue;
+        }
 
         // 2. Transformación de TIPO 
         let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
@@ -60,14 +87,14 @@ export async function loadCVData() {
         const coordenadas = await geocodificarConSelenium(
             est["DIRECCIÓN"] || "",
             municipio,
-            est.PROVINCIA,
+            datos.PROVINCIA,
             codigoPostal
         );
 
         // Pequeño delay entre peticiones para no sobrecargar
         await delay(SELENIUM_CONFIG.DELAY_BETWEEN_REQUESTS);
 
-        const estacionData: EstacionInsert = {
+        const estacionData = {
             nombre: `ITV ${municipio} ${est["Nº ESTACIÓN"]}`,
             tipo: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
@@ -87,17 +114,24 @@ export async function loadCVData() {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
         }
 
-        const errores = validarDatosEstacion(estacionData);
-        if (errores.length > 0) {
-            console.error(`❌ Datos inválidos para ${municipio}:`, errores);
-            continue;
+        const { error } = await supabase.from("estacion").insert(estacionData);
+        if (error) {
+            console.error("❌ Error insertando estación:", error.message);
+            rechazadas++;
+        } else {
+            cargadas++;
         }
-
-        const { error } = await supabase.from("estacion").insert(estacionData as any);
-        if (error) console.error("❌ Error insertando estación:", error.message);
     }
 
     // Cerrar el navegador de Selenium
     await cerrarNavegador();
-    console.log("✅ Datos de Comunidad Valenciana cargados correctamente");
+    
+    console.log("\n" + "=".repeat(70));
+    console.log("📊 RESUMEN DE CARGA - COMUNIDAD VALENCIANA");
+    console.log("=".repeat(70));
+    console.log(`✅ Estaciones cargadas: ${cargadas}`);
+    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
+    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`📝 Total procesadas: ${estaciones.length}`);
+    console.log("=".repeat(70) + "\n");
 }

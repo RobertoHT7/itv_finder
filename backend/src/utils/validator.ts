@@ -1,8 +1,8 @@
 /**
- * Sistema de validación de datos para estaciones ITV
+ * Sistema de validación y corrección automática de datos para estaciones ITV
  * 
- * Este módulo valida cada campo de las estaciones antes de insertarlas
- * en la base de datos, detectando errores tipográficos y datos incorrectos.
+ * Este módulo valida y CORRIGE automáticamente errores tipográficos,
+ * acentos, capitalización y formatos incorrectos.
  */
 
 // Listas oficiales de provincias españolas
@@ -10,39 +10,161 @@ const PROVINCIAS_VALIDAS = [
     // Comunidad Valenciana
     "Alicante", "Castellón", "Valencia",
     // Galicia
-    "A Coruña", "Coruña", "Lugo", "Ourense", "Pontevedra",
+    "A Coruña", "Lugo", "Ourense", "Pontevedra",
     // Cataluña
     "Barcelona", "Girona", "Lleida", "Tarragona",
 ];
 
-// Mapeo de errores comunes de provincia
+// Mapeo de municipios conocidos a sus provincias correctas
+const MUNICIPIOS_PROVINCIAS: { [municipio: string]: string } = {
+    // Barcelona
+    "barcelona": "Barcelona",
+    "sabadell": "Barcelona",
+    "terrassa": "Barcelona",
+    "badalona": "Barcelona",
+    "hospitalet": "Barcelona",
+    "l'hospitalet": "Barcelona",
+    "santa coloma": "Barcelona",
+    "mataro": "Barcelona",
+    "mataró": "Barcelona",
+    "cornella": "Barcelona",
+    "cornellà": "Barcelona",
+    "granollers": "Barcelona",
+    "sant boi": "Barcelona",
+    "manresa": "Barcelona",
+    "vic": "Barcelona",
+    "viladecans": "Barcelona",
+    "igualada": "Barcelona",
+    "mollet": "Barcelona",
+    "esplugues": "Barcelona",
+    "sant feliu": "Barcelona",
+    "sant cugat": "Barcelona",
+    // Tarragona
+    "tarragona": "Tarragona",
+    "reus": "Tarragona",
+    "tortosa": "Tarragona",
+    "el vendrell": "Tarragona",
+    "cambrils": "Tarragona",
+    "valls": "Tarragona",
+    "salou": "Tarragona",
+    // Lleida
+    "lleida": "Lleida",
+    "lerida": "Lleida",
+    "balaguer": "Lleida",
+    "mollerussa": "Lleida",
+    "tremp": "Lleida",
+    "la seu d'urgell": "Lleida",
+    "la seu": "Lleida",
+    // Girona
+    "girona": "Girona",
+    "gerona": "Girona",
+    "figueres": "Girona",
+    "blanes": "Girona",
+    "lloret": "Girona",
+    "olot": "Girona",
+    "salt": "Girona",
+    "palafrugell": "Girona",
+    // Comunidad Valenciana
+    "valencia": "Valencia",
+    "valència": "Valencia",
+    "torrent": "Valencia",
+    "gandia": "Valencia",
+    "sagunto": "Valencia",
+    "paterna": "Valencia",
+    "alcira": "Valencia",
+    "alzira": "Valencia",
+    "mislata": "Valencia",
+    "burjassot": "Valencia",
+    "alicante": "Alicante",
+    "alacant": "Alicante",
+    "elche": "Alicante",
+    "elx": "Alicante",
+    "torrevieja": "Alicante",
+    "orihuela": "Alicante",
+    "benidorm": "Alicante",
+    "alcoy": "Alicante",
+    "alcoi": "Alicante",
+    "denia": "Alicante",
+    "dénia": "Alicante",
+    "castellon": "Castellón",
+    "castelló": "Castellón",
+    "vila-real": "Castellón",
+    "villarreal": "Castellón",
+    "burriana": "Castellón",
+    "vinaros": "Castellón",
+    "vinaròs": "Castellón",
+    // Galicia
+    "a coruña": "A Coruña",
+    "coruña": "A Coruña",
+    "santiago": "A Coruña",
+    "ferrol": "A Coruña",
+    "lugo": "Lugo",
+    "ourense": "Ourense",
+    "orense": "Ourense",
+    "pontevedra": "Pontevedra",
+    "vigo": "Pontevedra",
+    "vilagarcía": "Pontevedra",
+};
+
+// Mapeo exhaustivo de errores comunes y variantes
 const PROVINCIAS_CORRECCIONES: { [key: string]: string } = {
+    // Comunidad Valenciana
     "aligante": "Alicante",
     "aligant": "Alicante",
     "alicate": "Alicante",
+    "alacant": "Alicante",
     "castellon": "Castellón",
     "castello": "Castellón",
+    "castelló": "Castellón",
+    "castello de la plana": "Castellón",
     "valencia": "Valencia",
-    "valència": "Valencia",
+    "valencià": "Valencia",
+    "vagencia": "Valencia",
+    "valencua": "Valencia",
+    "valncia": "Valencia",
+    "vaencia": "Valencia",
+    // Galicia
+    "coruna": "A Coruña",
     "coruña": "A Coruña",
+    "a coruna": "A Coruña",
+    "la coruña": "A Coruña",
+    "orense": "Ourense",
+    "lugo": "Lugo",
+    "pontevedra": "Pontevedra",
+    "pontevdra": "Pontevedra",
+    "pontevdera": "Pontevedra",
+    // Cataluña
+    "barcelona": "Barcelona",
+    "barcleona": "Barcelona",
+    "barselona": "Barcelona",
+    "barchelona": "Barcelona",
     "gerona": "Girona",
+    "girona": "Girona",
     "lerida": "Lleida",
+    "lleida": "Lleida",
+    "lérida": "Lleida",
+    "tarragona": "Tarragona",
+    "tarragon": "Tarragona",
+    "taragon": "Tarragona",
 };
 
 export interface ErrorValidacion {
     campo: string;
-    valor: string;
+    valorOriginal: string;
+    valorCorregido?: string;
     mensaje: string;
+    corregido: boolean;
 }
 
 export interface ResultadoValidacion {
     esValido: boolean;
     errores: ErrorValidacion[];
     advertencias: ErrorValidacion[];
+    datosCorregidos: any;
 }
 
 /**
- * Convierte un valor (que puede ser string, array o undefined) a string
+ * Convierte un valor a string
  */
 function toStringValue(value: any): string {
     if (value === null || value === undefined) return "";
@@ -51,26 +173,43 @@ function toStringValue(value: any): string {
 }
 
 /**
- * Normaliza un texto para comparación (sin tildes, minúsculas, sin espacios extra)
+ * Normaliza un texto (sin tildes, minúsculas, sin espacios extra)
  */
 function normalizar(texto: string): string {
     return texto
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
         .trim();
 }
 
 /**
- * Calcula la distancia de Levenshtein entre dos strings
- * Para detectar errores tipográficos
+ * Capitaliza correctamente un texto
+ */
+function capitalizar(texto: string): string {
+    return texto
+        .split(' ')
+        .map(palabra => {
+            if (palabra.length === 0) return palabra;
+            // Mantener "de", "del", "la", etc. en minúsculas excepto al inicio
+            const minusculas = ["de", "del", "la", "el", "los", "las", "y"];
+            if (minusculas.includes(palabra.toLowerCase())) {
+                return palabra.toLowerCase();
+            }
+            return palabra.charAt(0).toUpperCase() + palabra.slice(1).toLowerCase();
+        })
+        .join(' ')
+        .replace(/^(\w)/, match => match.toUpperCase()); // Primera letra siempre mayúscula
+}
+
+/**
+ * Calcula distancia de Levenshtein para detectar errores tipográficos
  */
 function distanciaLevenshtein(s1: string, s2: string): number {
     const m = s1.length;
     const n = s2.length;
-    const dp: number[][] = Array(m + 1)
-        .fill(null)
-        .map(() => Array(n + 1).fill(0));
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
 
     for (let i = 0; i <= m; i++) dp[i][0] = i;
     for (let j = 0; j <= n; j++) dp[0][j] = j;
@@ -81,290 +220,222 @@ function distanciaLevenshtein(s1: string, s2: string): number {
                 dp[i][j] = dp[i - 1][j - 1];
             } else {
                 dp[i][j] = Math.min(
-                    dp[i - 1][j] + 1,    // eliminación
-                    dp[i][j - 1] + 1,    // inserción
-                    dp[i - 1][j - 1] + 1 // sustitución
+                    dp[i - 1][j] + 1,
+                    dp[i][j - 1] + 1,
+                    dp[i - 1][j - 1] + 1
                 );
             }
         }
     }
-
     return dp[m][n];
 }
 
 /**
- * Busca la provincia más similar en caso de error tipográfico
+ * Busca y corrige provincia automáticamente
  */
-function buscarProvinciaSimilar(provincia: string): string | null {
-    const normalizado = normalizar(provincia);
+function corregirProvincia(provincia: string): { corregido: string; cambio: boolean } {
+    const provinciaTrim = provincia.trim();
+    const normalizado = normalizar(provinciaTrim);
 
-    // Primero buscar en correcciones conocidas
+    // Buscar en correcciones conocidas
     if (PROVINCIAS_CORRECCIONES[normalizado]) {
-        return PROVINCIAS_CORRECCIONES[normalizado];
+        return {
+            corregido: PROVINCIAS_CORRECCIONES[normalizado],
+            cambio: true
+        };
     }
 
-    // Buscar provincia con distancia de edición pequeña
-    let mejorCandidato: string | null = null;
+    // Buscar coincidencia exacta normalizada
+    for (const provinciaValida of PROVINCIAS_VALIDAS) {
+        if (normalizar(provinciaValida) === normalizado) {
+            // Solo marcar como cambio si el texto original es diferente
+            return { 
+                corregido: provinciaValida, 
+                cambio: provinciaTrim !== provinciaValida 
+            };
+        }
+    }
+
+    // Buscar similitud con Levenshtein (tolerancia de 2 caracteres)
+    let mejorCandidato = provinciaTrim;
     let menorDistancia = Infinity;
 
     for (const provinciaValida of PROVINCIAS_VALIDAS) {
-        const distancia = distanciaLevenshtein(
-            normalizado,
-            normalizar(provinciaValida)
-        );
-
-        // Si la distancia es pequeña (1-2 caracteres), es probablemente un error tipográfico
+        const distancia = distanciaLevenshtein(normalizado, normalizar(provinciaValida));
         if (distancia < menorDistancia && distancia <= 2) {
             menorDistancia = distancia;
             mejorCandidato = provinciaValida;
         }
     }
 
-    return mejorCandidato;
+    return {
+        corregido: mejorCandidato,
+        cambio: mejorCandidato !== provinciaTrim
+    };
 }
 
 /**
- * Valida una provincia
+ * Valida y corrige provincia
  */
-export function validarProvincia(provincia: any): ErrorValidacion | null {
-    const provinciaStr = toStringValue(provincia);
+export function validarYCorregirProvincia(provincia: any): {
+    esValido: boolean;
+    valorCorregido: string;
+    error: ErrorValidacion | null;
+} {
+    const provinciaStr = toStringValue(provincia).trim();
 
-    if (!provinciaStr || provinciaStr.trim() === "") {
+    if (!provinciaStr) {
         return {
-            campo: "PROVINCIA",
-            valor: provinciaStr,
-            mensaje: "La provincia es obligatoria y no puede estar vacía"
+            esValido: false,
+            valorCorregido: "",
+            error: {
+                campo: "PROVINCIA",
+                valorOriginal: provinciaStr,
+                mensaje: "La provincia es obligatoria",
+                corregido: false
+            }
         };
     }
 
-    const normalizado = normalizar(provinciaStr);
-    const esValida = PROVINCIAS_VALIDAS.some(p => normalizar(p) === normalizado);
+    const resultado = corregirProvincia(provinciaStr);
 
-    if (!esValida) {
-        const sugerencia = buscarProvinciaSimilar(provinciaStr);
-        const mensajeCompleto = sugerencia
-            ? `La provincia "${provinciaStr}" no es válida (¿quizás "${sugerencia}"?)`
-            : `La provincia "${provinciaStr}" no es válida`;
-        return {
+    return {
+        esValido: true,
+        valorCorregido: resultado.corregido,
+        error: resultado.cambio ? {
             campo: "PROVINCIA",
-            valor: provinciaStr,
-            mensaje: mensajeCompleto
-        };
-    }
-
-    return null;
+            valorOriginal: provinciaStr,
+            valorCorregido: resultado.corregido,
+            mensaje: `Corregido: "${provinciaStr}" → "${resultado.corregido}"`,
+            corregido: true
+        } : null
+    };
 }
 
 /**
- * Valida un municipio
+ * Valida y corrige municipio
  */
-export function validarMunicipio(municipio: any, provincia: any, tipoEstacion?: any): ErrorValidacion | null {
-    const municipioStr = toStringValue(municipio);
-    const tipoEstacionStr = toStringValue(tipoEstacion);
+export function validarYCorregirMunicipio(municipio: any, esMovil: boolean = false): {
+    esValido: boolean;
+    valorCorregido: string;
+    error: ErrorValidacion | null;
+} {
+    const municipioStr = toStringValue(municipio).trim();
 
-    // Las estaciones móviles y agrícolas pueden no tener municipio
-    const esMovilOAgricola = tipoEstacionStr && (normalizar(tipoEstacionStr).includes("movil") || normalizar(tipoEstacionStr).includes("agricola"));
-
-    if (!municipioStr || municipioStr.trim() === "" || municipioStr === "undefined") {
-        if (esMovilOAgricola) {
-            return null; // Es válido para estaciones móviles/agrícolas
+    if (!municipioStr || municipioStr === "undefined") {
+        if (esMovil) {
+            return { esValido: true, valorCorregido: "", error: null };
         }
         return {
-            campo: "MUNICIPIO",
-            valor: municipioStr,
-            mensaje: "El municipio es obligatorio y no puede estar vacío"
+            esValido: false,
+            valorCorregido: "",
+            error: {
+                campo: "MUNICIPIO",
+                valorOriginal: municipioStr,
+                mensaje: "El municipio es obligatorio",
+                corregido: false
+            }
         };
     }
 
-    // Validar que no sea un placeholder o valor genérico
-    if (municipioStr.toLowerCase().includes("desconocido") ||
-        municipioStr.toLowerCase() === "n/a" ||
-        municipioStr === "-") {
-        return {
-            campo: "MUNICIPIO",
-            valor: municipioStr,
-            mensaje: "El municipio no puede ser un valor genérico o desconocido"
-        };
-    }
+    // Corregir capitalización
+    const corregido = capitalizar(municipioStr);
+    const cambio = corregido !== municipioStr;
 
-    return null;
-}/**
- * Valida un código postal español (5 dígitos)
+    return {
+        esValido: true,
+        valorCorregido: corregido,
+        error: cambio ? {
+            campo: "MUNICIPIO",
+            valorOriginal: municipioStr,
+            valorCorregido: corregido,
+            mensaje: `Capitalización corregida: "${municipioStr}" → "${corregido}"`,
+            corregido: true
+        } : null
+    };
+}
+
+/**
+ * Valida y corrige código postal
  */
-export function validarCodigoPostal(cp: any, provincia?: any, tipoEstacion?: any): ErrorValidacion | null {
+export function validarYCorregirCodigoPostal(
+    cp: any,
+    provincia?: string,
+    esMovil: boolean = false
+): {
+    esValido: boolean;
+    valorCorregido: string;
+    error: ErrorValidacion | null;
+} {
     const cpStr = toStringValue(cp).trim();
-    const provinciaStr = toStringValue(provincia);
-    const tipoEstacionStr = toStringValue(tipoEstacion);
 
-    // Las estaciones móviles y agrícolas pueden no tener código postal
-    const esMovilOAgricola = tipoEstacionStr && (normalizar(tipoEstacionStr).includes("movil") || normalizar(tipoEstacionStr).includes("agricola"));
-
-    if (!cpStr || cpStr === "" || cpStr === "0" || cpStr === "00000" || cpStr === "undefined") {
-        if (esMovilOAgricola) {
-            return null; // Es válido para estaciones móviles/agrícolas
+    if (!cpStr || cpStr === "0" || cpStr === "00000" || cpStr === "undefined") {
+        if (esMovil) {
+            return { esValido: true, valorCorregido: "00000", error: null };
         }
         return {
-            campo: "C.POSTAL",
-            valor: cpStr,
-            mensaje: "El código postal es obligatorio y no puede ser vacío o 00000"
+            esValido: false,
+            valorCorregido: "00000",
+            error: {
+                campo: "C.POSTAL",
+                valorOriginal: cpStr,
+                mensaje: "Código postal vacío o 00000",
+                corregido: false
+            }
         };
     }
 
     // Validar formato: debe ser 5 dígitos
     if (!/^\d{5}$/.test(cpStr)) {
         return {
-            campo: "C.POSTAL",
-            valor: cpStr,
-            mensaje: `El código postal "${cpStr}" debe tener exactamente 5 dígitos numéricos`
+            esValido: false,
+            valorCorregido: cpStr,
+            error: {
+                campo: "C.POSTAL",
+                valorOriginal: cpStr,
+                mensaje: `Formato incorrecto: "${cpStr}" (debe tener 5 dígitos)`,
+                corregido: false
+            }
         };
     }
 
     // Validar coherencia con provincia
-    if (provinciaStr) {
-        const prefijo = parseInt(cpStr.substring(0, 2));
-        let prefijoEsperado: number[] = [];
+    if (provincia) {
+        const prefijo = cpStr.substring(0, 2);
+        const mapaPrefijos: { [key: string]: string[] } = {
+            "alicante": ["03"],
+            "castellón": ["12"],
+            "castellon": ["12"],
+            "valencia": ["46"],
+            "a coruña": ["15"],
+            "coruna": ["15"],
+            "lugo": ["27"],
+            "ourense": ["32"],
+            "pontevedra": ["36"],
+            "barcelona": ["08"],
+            "girona": ["17"],
+            "lleida": ["25"],
+            "tarragona": ["43"]
+        };
 
-        const provinciaNorm = normalizar(provinciaStr);
-        if (provinciaNorm.includes("alicante")) prefijoEsperado = [3];
-        else if (provinciaNorm.includes("castellon")) prefijoEsperado = [12];
-        else if (provinciaNorm.includes("valencia")) prefijoEsperado = [46];
-        else if (provinciaNorm.includes("coruna")) prefijoEsperado = [15];
-        else if (provinciaNorm.includes("lugo")) prefijoEsperado = [27];
-        else if (provinciaNorm.includes("ourense")) prefijoEsperado = [32];
-        else if (provinciaNorm.includes("pontevedra")) prefijoEsperado = [36];
-        else if (provinciaNorm.includes("barcelona")) prefijoEsperado = [8];
-        else if (provinciaNorm.includes("girona")) prefijoEsperado = [17];
-        else if (provinciaNorm.includes("lleida")) prefijoEsperado = [25];
-        else if (provinciaNorm.includes("tarragona")) prefijoEsperado = [43];
+        const provinciaNorm = normalizar(provincia);
+        const prefijosEsperados = mapaPrefijos[provinciaNorm];
 
-        if (prefijoEsperado.length > 0 && !prefijoEsperado.includes(prefijo)) {
+        if (prefijosEsperados && !prefijosEsperados.includes(prefijo)) {
             return {
-                campo: "C.POSTAL",
-                valor: cpStr,
-                mensaje: `El código postal "${cpStr}" no corresponde con la provincia "${provinciaStr}" (debe empezar con ${prefijoEsperado.join(" o ")})`
+                esValido: false,
+                valorCorregido: cpStr,
+                error: {
+                    campo: "C.POSTAL",
+                    valorOriginal: cpStr,
+                    mensaje: `CP ${cpStr} no corresponde a ${provincia} (debe empezar por ${prefijosEsperados.join(" o ")})`,
+                    corregido: false
+                }
             };
         }
     }
 
-    return null;
-}
-
-/**
- * Valida una dirección
- */
-export function validarDireccion(direccion: any): ErrorValidacion | null {
-    const direccionStr = toStringValue(direccion);
-
-    if (!direccionStr || direccionStr.trim() === "") {
-        return {
-            campo: "DIRECCIÓN",
-            valor: direccionStr,
-            mensaje: "La dirección es obligatoria y no puede estar vacía"
-        };
-    }
-
-    // Validar que no sea un valor genérico
-    if (direccionStr.toLowerCase().includes("sin dirección") ||
-        direccionStr.toLowerCase() === "n/a" ||
-        direccionStr === "-") {
-        return {
-            campo: "DIRECCIÓN",
-            valor: direccionStr,
-            mensaje: "La dirección no puede ser un valor genérico"
-        };
-    }
-
-    // Debe tener al menos 5 caracteres
-    if (direccionStr.length < 5) {
-        return {
-            campo: "DIRECCIÓN",
-            valor: direccionStr,
-            mensaje: "La dirección es demasiado corta, debe ser más descriptiva"
-        };
-    }
-
-    return null;
-}
-
-/**
- * Valida un email
- */
-export function validarEmail(email: any): ErrorValidacion | null {
-    const emailStr = toStringValue(email);
-
-    if (!emailStr || emailStr.trim() === "") {
-        return {
-            campo: "CORREO",
-            valor: emailStr,
-            mensaje: "El correo electrónico no puede estar vacío"
-        };
-    }
-
-    // Expresión regular básica para email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailStr)) {
-        return {
-            campo: "CORREO",
-            valor: emailStr,
-            mensaje: `El correo "${emailStr}" no tiene un formato válido`
-        };
-    }
-
-    return null;
-}
-
-/**
- * Valida el tipo de estación
- */
-export function validarTipoEstacion(tipo: any): ErrorValidacion | null {
-    const tipoStr = toStringValue(tipo);
-
-    if (!tipoStr || tipoStr.trim() === "") {
-        return {
-            campo: "TIPO ESTACIÓN",
-            valor: tipoStr,
-            mensaje: "El tipo de estación es obligatorio"
-        };
-    }
-
-    const tipoNorm = normalizar(tipoStr).replace(/\s+/g, "");
-    const tiposValidos = ["estacionfija", "estacionmovil", "estacionagricola", "otros"];
-
-    const esValido = tiposValidos.some(t => tipoNorm === t || tipoNorm.includes(t));
-
-    if (!esValido) {
-        return {
-            campo: "TIPO ESTACIÓN",
-            valor: tipoStr,
-            mensaje: `El tipo de estación "${tipoStr}" no es reconocido`
-        };
-    }
-
-    return null;
-}
-
-/**
- * Valida un número de estación
- */
-export function validarNumeroEstacion(numero: number | string): ErrorValidacion | null {
-    if (!numero && numero !== 0) {
-        return {
-            campo: "Nº ESTACIÓN",
-            valor: String(numero),
-            mensaje: "El número de estación es obligatorio"
-        };
-    }
-
-    const numeroStr = String(numero);
-    if (!/^\d+$/.test(numeroStr)) {
-        return {
-            campo: "Nº ESTACIÓN",
-            valor: numeroStr,
-            mensaje: `El número de estación "${numeroStr}" debe ser numérico`
-        };
-    }
-
-    return null;
+    return { esValido: true, valorCorregido: cpStr, error: null };
 }
 
 /**
@@ -376,33 +447,32 @@ export function validarCoordenadas(lat: number, lon: number): ErrorValidacion[] 
     if (isNaN(lat) || lat === 0) {
         errores.push({
             campo: "LATITUD",
-            valor: String(lat),
-            mensaje: "La latitud no es válida o es 0"
+            valorOriginal: String(lat),
+            mensaje: "Latitud inválida o 0",
+            corregido: false
+        });
+    } else if (lat < 27 || lat > 44) {
+        errores.push({
+            campo: "LATITUD",
+            valorOriginal: String(lat),
+            mensaje: `Latitud ${lat} fuera del rango de España (27-44)`,
+            corregido: false
         });
     }
 
     if (isNaN(lon) || lon === 0) {
         errores.push({
             campo: "LONGITUD",
-            valor: String(lon),
-            mensaje: "La longitud no es válida o es 0"
+            valorOriginal: String(lon),
+            mensaje: "Longitud inválida o 0",
+            corregido: false
         });
-    }
-
-    // Validar rango para España (aproximado)
-    if (lat < 36 || lat > 44) {
-        errores.push({
-            campo: "LATITUD",
-            valor: String(lat),
-            mensaje: `La latitud ${lat} está fuera del rango de España (36-44) - verificar formato`
-        });
-    }
-
-    if (lon < -10 || lon > 5) {
+    } else if (lon < -19 || lon > 5) {
         errores.push({
             campo: "LONGITUD",
-            valor: String(lon),
-            mensaje: `La longitud ${lon} está fuera del rango de España (-10 a 5) - verificar formato`
+            valorOriginal: String(lon),
+            mensaje: `Longitud ${lon} fuera del rango de España (-19 a 5)`,
+            corregido: false
         });
     }
 
@@ -410,160 +480,120 @@ export function validarCoordenadas(lat: number, lon: number): ErrorValidacion[] 
 }
 
 /**
- * Valida horario
+ * Función principal: valida y corrige todos los datos de una estación
  */
-export function validarHorario(horario: any): ErrorValidacion | null {
-    const horarioStr = toStringValue(horario);
-
-    if (!horarioStr || horarioStr.trim() === "") {
-        return {
-            campo: "HORARIOS",
-            valor: horarioStr,
-            mensaje: "El horario es obligatorio"
-        };
-    }
-
-    // Validar que no sea un valor genérico poco informativo
-    if (horarioStr.toLowerCase() === "n/a" ||
-        horarioStr === "-" ||
-        horarioStr.toLowerCase().includes("no especificado")) {
-        return {
-            campo: "HORARIOS",
-            valor: horarioStr,
-            mensaje: "El horario debe ser específico, no un valor genérico"
-        };
-    }
-
-    return null;
-}
-
-/**
- * Función principal que valida todos los datos de una estación
- */
-export function validarEstacionCompleta(estacion: any, origen: string): ResultadoValidacion {
+export function validarYCorregirEstacion(estacion: any, origen: string): ResultadoValidacion {
     const errores: ErrorValidacion[] = [];
     const advertencias: ErrorValidacion[] = [];
+    const datosCorregidos: any = { ...estacion };
 
-    console.log(`\n🔍 Validando estación: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || "Sin nombre"}`);
-    console.log("=".repeat(60));
+    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || "Sin nombre"}`);
+    console.log("=".repeat(70));
 
-    // Obtener tipo de estación primero para validaciones condicionales
-    const tipoEstacion = estacion["TIPO ESTACIÓN"] || estacion["TIPO ESTACION"];
+    // Determinar si es móvil
+    const tipoEstacion = estacion["TIPO ESTACIÓN"] || estacion["TIPO ESTACION"] || "";
+    const esMovil = normalizar(String(tipoEstacion)).includes("movil");
 
-    // Validar provincia
-    const provincia = estacion.PROVINCIA || estacion.provincia || estacion.serveis_territorials;
-    const errorProvincia = validarProvincia(provincia);
-    if (errorProvincia) {
-        errores.push(errorProvincia);
-        console.log(`❌ ${errorProvincia.campo}: "${errorProvincia.valor}" - ${errorProvincia.mensaje}`);
-    } else {
-        console.log(`✅ ${provincia} - Provincia válida`);
-    }
-
-    // Validar tipo de estación primero (para CV)
-    if (tipoEstacion) {
-        const errorTipo = validarTipoEstacion(tipoEstacion);
-        if (errorTipo) {
-            errores.push(errorTipo);
-            console.log(`❌ ${errorTipo.campo}: "${errorTipo.valor}" - ${errorTipo.mensaje}`);
+    // 1. PROVINCIA
+    const provinciaOriginal = estacion.PROVINCIA || estacion.provincia || estacion.serveis_territorials;
+    const resultProvincia = validarYCorregirProvincia(provinciaOriginal);
+    
+    if (resultProvincia.error) {
+        if (resultProvincia.error.corregido) {
+            advertencias.push(resultProvincia.error);
+            console.log(`✏️  ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
         } else {
-            console.log(`✅ ${tipoEstacion} - Tipo válido`);
+            errores.push(resultProvincia.error);
+            console.log(`❌ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
+        }
+    } else {
+        console.log(`✅ PROVINCIA: "${resultProvincia.valorCorregido}"`);
+    }
+    datosCorregidos.PROVINCIA = resultProvincia.valorCorregido;
+
+    // 2. MUNICIPIO
+    const municipioOriginal = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
+    const resultMunicipio = validarYCorregirMunicipio(municipioOriginal, esMovil);
+    
+    if (resultMunicipio.error) {
+        if (resultMunicipio.error.corregido) {
+            advertencias.push(resultMunicipio.error);
+            console.log(`✏️  ${resultMunicipio.error.mensaje}`);
+        } else {
+            errores.push(resultMunicipio.error);
+            console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
+        }
+    } else if (resultMunicipio.valorCorregido) {
+        console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
+    }
+    datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
+
+    // 2.5. VALIDAR COHERENCIA MUNICIPIO-PROVINCIA
+    let provinciaFinal = resultProvincia.valorCorregido;
+    if (resultMunicipio.valorCorregido && resultProvincia.valorCorregido) {
+        const municipioNorm = normalizar(resultMunicipio.valorCorregido);
+        const provinciaCorrecta = MUNICIPIOS_PROVINCIAS[municipioNorm];
+        
+        if (provinciaCorrecta && provinciaCorrecta !== resultProvincia.valorCorregido) {
+            // El municipio pertenece a otra provincia
+            advertencias.push({
+                campo: "PROVINCIA",
+                valorOriginal: resultProvincia.valorCorregido,
+                valorCorregido: provinciaCorrecta,
+                mensaje: `Provincia corregida: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}" (${resultMunicipio.valorCorregido} pertenece a ${provinciaCorrecta})`,
+                corregido: true
+            });
+            console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
+            provinciaFinal = provinciaCorrecta;
+            datosCorregidos.PROVINCIA = provinciaCorrecta;
         }
     }
 
-    // Validar municipio (opcional para móviles/agrícolas)
-    const municipio = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
-    const errorMunicipio = validarMunicipio(municipio, provincia, tipoEstacion);
-    if (errorMunicipio) {
-        errores.push(errorMunicipio);
-        console.log(`❌ ${errorMunicipio.campo}: "${errorMunicipio.valor}" - ${errorMunicipio.mensaje}`);
-    } else {
-        if (municipio && municipio !== "undefined") {
-            console.log(`✅ ${municipio} - Municipio válido`);
+    // 3. CÓDIGO POSTAL (validar con la provincia corregida)
+    const cpOriginal = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
+    const resultCP = validarYCorregirCodigoPostal(cpOriginal, provinciaFinal, esMovil);
+    
+    if (resultCP.error) {
+        if (resultCP.error.corregido) {
+            advertencias.push(resultCP.error);
+            console.log(`✏️  ${resultCP.error.mensaje}`);
         } else {
-            console.log(`✅ Municipio no requerido (estación móvil/agrícola)`);
+            errores.push(resultCP.error);
+            console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
         }
-    }
-
-    // Validar código postal (opcional para móviles/agrícolas)
-    const cp = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
-    const errorCP = validarCodigoPostal(cp, provincia, tipoEstacion);
-    if (errorCP) {
-        errores.push(errorCP);
-        console.log(`❌ ${errorCP.campo}: "${errorCP.valor}" - ${errorCP.mensaje}`);
     } else {
-        if (cp && cp !== "undefined" && cp !== "" && String(cp) !== "0") {
-            console.log(`✅ ${cp} - Código postal válido`);
-        } else {
-            console.log(`✅ Código postal no requerido (estación móvil/agrícola)`);
-        }
+        console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
+    }
+    datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
+
+    // 4. COORDENADAS
+    const lat = estacion.latitud || estacion.lat || 0;
+    const lon = estacion.longitud || estacion.lon || 0;
+    const erroresCoordenadas = validarCoordenadas(lat, lon);
+    
+    erroresCoordenadas.forEach(err => {
+        errores.push(err);
+        console.log(`❌ ${err.campo}: ${err.mensaje}`);
+    });
+
+    if (erroresCoordenadas.length === 0 && (lat !== 0 || lon !== 0)) {
+        console.log(`✅ COORDENADAS: ${lat}, ${lon}`);
     }
 
-    // Validar dirección
-    const direccion = estacion["DIRECCIÓN"] || estacion.ENDEREZO || estacion.adre_a;
-    const errorDireccion = validarDireccion(direccion);
-    if (errorDireccion) {
-        errores.push(errorDireccion);
-        console.log(`❌ ${errorDireccion.campo}: "${errorDireccion.valor}" - ${errorDireccion.mensaje}`);
+    console.log("=".repeat(70));
+
+    const esValido = errores.length === 0;
+
+    if (esValido) {
+        console.log(`✅ ESTACIÓN VÁLIDA (${advertencias.length} corrección/correcciones aplicadas)`);
     } else {
-        console.log(`✅ Dirección válida`);
-    }
-
-    // Validar número de estación (solo para CV)
-    if (estacion["Nº ESTACIÓN"]) {
-        const errorNumero = validarNumeroEstacion(estacion["Nº ESTACIÓN"]);
-        if (errorNumero) {
-            errores.push(errorNumero);
-            console.log(`❌ ${errorNumero.campo}: "${errorNumero.valor}" - ${errorNumero.mensaje}`);
-        } else {
-            console.log(`✅ ${estacion["Nº ESTACIÓN"]} - Número de estación válido`);
-        }
-    }
-
-    // Validar email (solo para CV y GAL)
-    if (estacion.CORREO || estacion["CORREO ELECTRÓNICO"] || estacion["CORREO ELECTRNICO"]) {
-        const email = estacion.CORREO || estacion["CORREO ELECTRÓNICO"] || estacion["CORREO ELECTRNICO"];
-        const errorEmail = validarEmail(email);
-        if (errorEmail) {
-            errores.push(errorEmail);
-            console.log(`❌ ${errorEmail.campo}: "${errorEmail.valor}" - ${errorEmail.mensaje}`);
-        } else {
-            console.log(`✅ Email válido`);
-        }
-    }
-
-    // Validar horario
-    const horario = estacion.HORARIOS || estacion.HORARIO || estacion.horari_de_servei;
-    const errorHorario = validarHorario(horario);
-    if (errorHorario) {
-        // Los horarios sin especificar son una advertencia, no un error crítico
-        advertencias.push(errorHorario);
-        console.log(`⚠️  ${errorHorario.campo}: ${errorHorario.mensaje}`);
-    } else {
-        console.log(`✅ Horario válido`);
-    }
-
-    console.log("=".repeat(60));
-
-    if (errores.length > 0) {
-        console.log(`\n❌ ESTACIÓN RECHAZADA: ${errores.length} error(es) encontrado(s)`);
-        errores.forEach((err, i) => {
-            console.log(`   ${i + 1}. ${err.campo}: ${err.mensaje}`);
-        });
-    } else {
-        console.log(`\n✅ ESTACIÓN VÁLIDA: Todos los datos son correctos`);
-    }
-
-    if (advertencias.length > 0) {
-        console.log(`\n⚠️  ${advertencias.length} advertencia(s):`);
-        advertencias.forEach((adv, i) => {
-            console.log(`   ${i + 1}. ${adv.campo}: ${adv.mensaje}`);
-        });
+        console.log(`❌ ESTACIÓN RECHAZADA: ${errores.length} error/errores críticos`);
     }
 
     return {
-        esValido: errores.length === 0,
+        esValido,
         errores,
-        advertencias
+        advertencias,
+        datosCorregidos
     };
 }

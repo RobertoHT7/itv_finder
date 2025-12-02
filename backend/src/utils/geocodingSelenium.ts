@@ -21,22 +21,43 @@ async function inicializarNavegador(): Promise<WebDriver> {
     try {
         console.log('🚀 Inicializando navegador Chrome con Selenium...');
         const options = new chrome.Options();
+        // --- BÁSICOS ---
         options.addArguments('--headless=new');
-        options.addArguments('--disable-gpu');
+        options.addArguments('--window-size=1920,1080');
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
-        options.addArguments('--disable-blink-features=AutomationControlled');
-        options.addArguments('--window-size=1920,1080');
-        options.addArguments('--disable-extensions');
-        options.addArguments('--disable-logging');
-        options.addArguments('--log-level=3');
+        
+        // --- RENDIMIENTO Y GPU (Evita "GPU state invalid") ---
+        options.addArguments('--disable-gpu');
         options.addArguments('--disable-software-rasterizer');
         options.addArguments('--disable-features=VizDisplayCompositor');
-        options.excludeSwitches('enable-logging');
+        options.addArguments('--disable-extensions');
+
+        // --- SILENCIAR LOGS (Nivel Dios) ---
+        options.addArguments('--log-level=3'); // Fatal only
+        options.addArguments('--silent');
+        options.addArguments('--disable-logging');
+        
+        // Evita errores de USB en Windows
+        options.addArguments('--disable-usb-device-event-log');
+        options.addArguments('--disable-usb-keyboard-detect');
+        
+        // Evita errores de PHONE_REGISTRATION (Google Sync)
+        options.addArguments('--disable-sync');
+        options.addArguments('--disable-background-networking');
+        options.addArguments('--disable-default-apps');
+        
+        // Importante: Excluir el switch de logging por defecto
+        options.excludeSwitches('enable-logging'); 
+        options.excludeSwitches('enable-automation'); // Opcional: quita la barra "Chrome está siendo controlado..."
+
+        const service = new chrome.ServiceBuilder()
+            .setStdio('ignore'); 
 
         driver = await new Builder()
             .forBrowser('chrome')
             .setChromeOptions(options)
+            .setChromeService(service) // <--- AQUI ESTÁ EL TRUCO
             .build();
 
         // Configurar timeouts cortos
@@ -47,7 +68,7 @@ async function inicializarNavegador(): Promise<WebDriver> {
         });
 
         driverInitialized = true;
-        console.log('✅ Navegador Chrome inicializado');
+        // console.log('✅ Navegador Chrome inicializado');
         return driver;
     } catch (error) {
         console.error('❌ Error inicializando navegador:', error);
