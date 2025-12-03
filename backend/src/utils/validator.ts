@@ -480,7 +480,112 @@ export function validarCoordenadas(lat: number, lon: number): ErrorValidacion[] 
 }
 
 /**
- * Función principal: valida y corrige todos los datos de una estación
+ * Función para validar estación SIN coordenadas (antes de geocodificación)
+ */
+export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: string): ResultadoValidacion {
+    const errores: ErrorValidacion[] = [];
+    const advertencias: ErrorValidacion[] = [];
+    const datosCorregidos: any = { ...estacion };
+
+    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || "Sin nombre"}`);
+    console.log("=".repeat(70));
+
+    // Determinar si es móvil
+    const tipoEstacion = estacion["TIPO ESTACIÓN"] || estacion["TIPO ESTACION"] || "";
+    const esMovil = normalizar(String(tipoEstacion)).includes("movil");
+
+    // 1. PROVINCIA
+    const provinciaOriginal = estacion.PROVINCIA || estacion.provincia || estacion.serveis_territorials;
+    const resultProvincia = validarYCorregirProvincia(provinciaOriginal);
+    
+    if (resultProvincia.error) {
+        if (resultProvincia.error.corregido) {
+            advertencias.push(resultProvincia.error);
+            console.log(`✏️  ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
+        } else {
+            errores.push(resultProvincia.error);
+            console.log(`❌ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
+        }
+    } else {
+        console.log(`✅ PROVINCIA: "${resultProvincia.valorCorregido}"`);
+    }
+    datosCorregidos.PROVINCIA = resultProvincia.valorCorregido;
+
+    // 2. MUNICIPIO
+    const municipioOriginal = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
+    const resultMunicipio = validarYCorregirMunicipio(municipioOriginal, esMovil);
+    
+    if (resultMunicipio.error) {
+        if (resultMunicipio.error.corregido) {
+            advertencias.push(resultMunicipio.error);
+            console.log(`✏️  ${resultMunicipio.error.mensaje}`);
+        } else {
+            errores.push(resultMunicipio.error);
+            console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
+        }
+    } else if (resultMunicipio.valorCorregido) {
+        console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
+    }
+    datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
+
+    // 2.5. VALIDAR COHERENCIA MUNICIPIO-PROVINCIA
+    let provinciaFinal = resultProvincia.valorCorregido;
+    if (resultMunicipio.valorCorregido && resultProvincia.valorCorregido) {
+        const municipioNorm = normalizar(resultMunicipio.valorCorregido);
+        const provinciaCorrecta = MUNICIPIOS_PROVINCIAS[municipioNorm];
+        
+        if (provinciaCorrecta && provinciaCorrecta !== resultProvincia.valorCorregido) {
+            // El municipio pertenece a otra provincia
+            advertencias.push({
+                campo: "PROVINCIA",
+                valorOriginal: resultProvincia.valorCorregido,
+                valorCorregido: provinciaCorrecta,
+                mensaje: `Provincia corregida: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}" (${resultMunicipio.valorCorregido} pertenece a ${provinciaCorrecta})`,
+                corregido: true
+            });
+            console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
+            provinciaFinal = provinciaCorrecta;
+            datosCorregidos.PROVINCIA = provinciaCorrecta;
+        }
+    }
+
+    // 3. CÓDIGO POSTAL (validar con la provincia corregida)
+    const cpOriginal = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
+    const resultCP = validarYCorregirCodigoPostal(cpOriginal, provinciaFinal, esMovil);
+    
+    if (resultCP.error) {
+        if (resultCP.error.corregido) {
+            advertencias.push(resultCP.error);
+            console.log(`✏️  ${resultCP.error.mensaje}`);
+        } else {
+            errores.push(resultCP.error);
+            console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
+        }
+    } else {
+        console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
+    }
+    datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
+
+    console.log("=".repeat(70));
+
+    const esValido = errores.length === 0;
+
+    if (esValido) {
+        console.log(`✅ ESTACIÓN VÁLIDA (${advertencias.length} corrección/correcciones aplicadas)`);
+    } else {
+        console.log(`❌ ESTACIÓN RECHAZADA: ${errores.length} error/errores críticos`);
+    }
+
+    return {
+        esValido,
+        errores,
+        advertencias,
+        datosCorregidos
+    };
+}
+
+/**
+ * Función principal: valida y corrige todos los datos de una estación (CON coordenadas)
  */
 export function validarYCorregirEstacion(estacion: any, origen: string): ResultadoValidacion {
     const errores: ErrorValidacion[] = [];

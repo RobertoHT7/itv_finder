@@ -3,7 +3,7 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
-import { geocodificarConSelenium, delay, cerrarNavegador } from "../utils/geocodingSelenium";
+import { geocodificarConSelenium, delay } from "../utils/geocoding";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -30,17 +30,14 @@ export async function loadCVDataPrueba() {
     let corregidas = 0;
 
     for (const est of estaciones) {
-        // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS
-        const validacion = validarYCorregirEstacion(est, "Comunidad Valenciana");
+        // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS (sin coordenadas aún)
+        const { validarYCorregirEstacionSinCoordenadas } = await import("../utils/validator");
+        const validacion = validarYCorregirEstacionSinCoordenadas(est, "Comunidad Valenciana");
 
         if (!validacion.esValido) {
             rechazadas++;
             console.log(`\n🚫 La estación será RECHAZADA por errores críticos\n`);
             continue;
-        }
-
-        if (validacion.advertencias.length > 0) {
-            corregidas++;
         }
 
         console.log(`\n✅ Estación validada, procediendo a la geocodificación e inserción...\n`);
@@ -109,8 +106,22 @@ export async function loadCVDataPrueba() {
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+            
+            // Validar coordenadas después de obtenerlas
+            const { validarCoordenadas } = await import("../utils/validator");
+            const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
+            
+            if (erroresCoordenadas.length > 0) {
+                console.warn(`⚠️ Coordenadas fuera de rango:`);
+                erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
+            }
         } else {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
+        }
+
+        // Contar correcciones al final
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
         }
 
         const { error } = await supabase.from("estacion").insert(estacionData);
@@ -122,8 +133,6 @@ export async function loadCVDataPrueba() {
             cargadas++;
         }
     }
-
-    await cerrarNavegador();
 
     console.log(`\n${"=".repeat(80)}`);
     console.log(`📊 RESUMEN COMUNIDAD VALENCIANA - PRUEBA`);

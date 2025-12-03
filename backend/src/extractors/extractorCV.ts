@@ -3,7 +3,6 @@ import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
-import { cerrarNavegador } from "../utils/geocodingSelenium";
 import { SELENIUM_CONFIG } from "../utils/seleniumConfig";
 import { validarYCorregirEstacion } from "../utils/validator";
 
@@ -30,17 +29,14 @@ export async function loadCVData() {
     let corregidas = 0;
 
     for (const est of estaciones) {
-        // VALIDAR Y CORREGIR DATOS
-        const validacion = validarYCorregirEstacion(est, "Comunidad Valenciana");
+        // VALIDAR Y CORREGIR DATOS (sin coordenadas aún)
+        const { validarYCorregirEstacionSinCoordenadas } = await import("../utils/validator");
+        const validacion = validarYCorregirEstacionSinCoordenadas(est, "Comunidad Valenciana");
         
         if (!validacion.esValido) {
             rechazadas++;
             console.log(`⛔ Estación rechazada por errores críticos\n`);
             continue;
-        }
-
-        if (validacion.advertencias.length > 0) {
-            corregidas++;
         }
 
         // Usar datos corregidos
@@ -110,8 +106,22 @@ export async function loadCVData() {
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+            
+            // Validar coordenadas después de obtenerlas
+            const { validarCoordenadas } = await import("../utils/validator");
+            const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
+            
+            if (erroresCoordenadas.length > 0) {
+                console.warn(`⚠️ Coordenadas fuera de rango:`);
+                erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
+            }
         } else {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
+        }
+
+        // Contar correcciones al final
+        if (validacion.advertencias.length > 0) {
+            corregidas++;
         }
 
         const { error } = await supabase.from("estacion").insert(estacionData);
@@ -122,9 +132,6 @@ export async function loadCVData() {
             cargadas++;
         }
     }
-
-    // Cerrar el navegador de Selenium
-    await cerrarNavegador();
     
     console.log("\n" + "=".repeat(70));
     console.log("📊 RESUMEN DE CARGA - COMUNIDAD VALENCIANA");
