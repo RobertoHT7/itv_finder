@@ -57,10 +57,8 @@ export async function geocodificarConSelenium(
         driver = await new Builder().forBrowser(Browser.CHROME).build();
         await driver.get('https://www.google.com/maps?hl=es');
 
-        // 2. Gestionar el banner de cookies (Crítico en España)
+        //Gestionar el banner de cookies
         try {
-            // Buscamos botones de forma más agresiva. Google suele usar estructura: Button > span > "Aceptar todo"
-            // El xpath busca cualquier elemento que contenga "Aceptar todo" o "Acepto" y busca su ancestro botón o el elemento mismo si es clickable
             const xpathCookies = "//button//span[contains(text(), 'Aceptar todo')] | //button[contains(., 'Aceptar todo')] | //span[contains(text(), 'Acepto')]/..";
 
             const acceptCookiesBtn = await driver.wait(
@@ -71,7 +69,6 @@ export async function geocodificarConSelenium(
             // A veces selenium intenta hacer click antes de que sea interactivo
             await delay(500);
             await acceptCookiesBtn.click();
-            console.log("🍪 Cookies aceptadas.");
             await delay(1000); // Esperar a que desaparezca el modal
         } catch (e) {
             console.log("ℹ️ No se detectó banner de cookies (o falló el click), intentando continuar...");
@@ -101,7 +98,6 @@ export async function geocodificarConSelenium(
         await delay(2000);
 
         const currentUrl = await driver.getCurrentUrl();
-        console.log(`🔗 URL obtenida: ${currentUrl}`);
 
         // 6. Extraer coordenadas con Regex
         const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;

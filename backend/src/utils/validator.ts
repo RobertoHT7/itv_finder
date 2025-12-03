@@ -249,9 +249,9 @@ function corregirProvincia(provincia: string): { corregido: string; cambio: bool
     for (const provinciaValida of PROVINCIAS_VALIDAS) {
         if (normalizar(provinciaValida) === normalizado) {
             // Solo marcar como cambio si el texto original es diferente
-            return { 
-                corregido: provinciaValida, 
-                cambio: provinciaTrim !== provinciaValida 
+            return {
+                corregido: provinciaValida,
+                cambio: provinciaTrim !== provinciaValida
             };
         }
     }
@@ -487,17 +487,19 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
     const advertencias: ErrorValidacion[] = [];
     const datosCorregidos: any = { ...estacion };
 
-    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || "Sin nombre"}`);
-    console.log("=".repeat(70));
-
     // Determinar si es móvil
     const tipoEstacion = estacion["TIPO ESTACIÓN"] || estacion["TIPO ESTACION"] || "";
     const esMovil = normalizar(String(tipoEstacion)).includes("movil");
+    const esAgricola = normalizar(String(tipoEstacion)).includes("agricola");
+
+    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || (esMovil ? "Estación móvil" : "Estación Agrícola")}`);
+    console.log("=".repeat(70));
+
 
     // 1. PROVINCIA
     const provinciaOriginal = estacion.PROVINCIA || estacion.provincia || estacion.serveis_territorials;
     const resultProvincia = validarYCorregirProvincia(provinciaOriginal);
-    
+
     if (resultProvincia.error) {
         if (resultProvincia.error.corregido) {
             advertencias.push(resultProvincia.error);
@@ -511,60 +513,68 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
     }
     datosCorregidos.PROVINCIA = resultProvincia.valorCorregido;
 
-    // 2. MUNICIPIO
-    const municipioOriginal = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
-    const resultMunicipio = validarYCorregirMunicipio(municipioOriginal, esMovil);
-    
-    if (resultMunicipio.error) {
-        if (resultMunicipio.error.corregido) {
-            advertencias.push(resultMunicipio.error);
-            console.log(`✏️  ${resultMunicipio.error.mensaje}`);
-        } else {
-            errores.push(resultMunicipio.error);
-            console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
-        }
-    } else if (resultMunicipio.valorCorregido) {
-        console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
-    }
-    datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
-
-    // 2.5. VALIDAR COHERENCIA MUNICIPIO-PROVINCIA
-    let provinciaFinal = resultProvincia.valorCorregido;
-    if (resultMunicipio.valorCorregido && resultProvincia.valorCorregido) {
-        const municipioNorm = normalizar(resultMunicipio.valorCorregido);
-        const provinciaCorrecta = MUNICIPIOS_PROVINCIAS[municipioNorm];
-        
-        if (provinciaCorrecta && provinciaCorrecta !== resultProvincia.valorCorregido) {
-            // El municipio pertenece a otra provincia
-            advertencias.push({
-                campo: "PROVINCIA",
-                valorOriginal: resultProvincia.valorCorregido,
-                valorCorregido: provinciaCorrecta,
-                mensaje: `Provincia corregida: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}" (${resultMunicipio.valorCorregido} pertenece a ${provinciaCorrecta})`,
-                corregido: true
-            });
-            console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
-            provinciaFinal = provinciaCorrecta;
-            datosCorregidos.PROVINCIA = provinciaCorrecta;
-        }
+    if (esMovil) {
+        console.log("⚠️  Estación móvil, se omite validación de municipio y CP.");
+    } else if (esAgricola) {
+        console.log("⚠️  Estación agrícola, se omite validación de municipio y CP.");
     }
 
-    // 3. CÓDIGO POSTAL (validar con la provincia corregida)
-    const cpOriginal = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
-    const resultCP = validarYCorregirCodigoPostal(cpOriginal, provinciaFinal, esMovil);
-    
-    if (resultCP.error) {
-        if (resultCP.error.corregido) {
-            advertencias.push(resultCP.error);
-            console.log(`✏️  ${resultCP.error.mensaje}`);
-        } else {
-            errores.push(resultCP.error);
-            console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
+    if (!esMovil && !esAgricola) {
+        // 2. MUNICIPIO
+        const municipioOriginal = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
+        const resultMunicipio = validarYCorregirMunicipio(municipioOriginal, esMovil || esAgricola);
+
+        if (resultMunicipio.error) {
+            if (resultMunicipio.error.corregido) {
+                advertencias.push(resultMunicipio.error);
+                console.log(`✏️  ${resultMunicipio.error.mensaje}`);
+            } else {
+                errores.push(resultMunicipio.error);
+                console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
+            }
+        } else if (resultMunicipio.valorCorregido) {
+            console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
         }
-    } else {
-        console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
+        datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
+
+        // 2.5. VALIDAR COHERENCIA MUNICIPIO-PROVINCIA
+        let provinciaFinal = resultProvincia.valorCorregido;
+        if (resultMunicipio.valorCorregido && resultProvincia.valorCorregido) {
+            const municipioNorm = normalizar(resultMunicipio.valorCorregido);
+            const provinciaCorrecta = MUNICIPIOS_PROVINCIAS[municipioNorm];
+
+            if (provinciaCorrecta && provinciaCorrecta !== resultProvincia.valorCorregido) {
+                // El municipio pertenece a otra provincia
+                advertencias.push({
+                    campo: "PROVINCIA",
+                    valorOriginal: resultProvincia.valorCorregido,
+                    valorCorregido: provinciaCorrecta,
+                    mensaje: `Provincia corregida: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}" (${resultMunicipio.valorCorregido} pertenece a ${provinciaCorrecta})`,
+                    corregido: true
+                });
+                console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
+                provinciaFinal = provinciaCorrecta;
+                datosCorregidos.PROVINCIA = provinciaCorrecta;
+            }
+        }
+
+        // 3. CÓDIGO POSTAL (validar con la provincia corregida)
+        const cpOriginal = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
+        const resultCP = validarYCorregirCodigoPostal(cpOriginal, provinciaFinal, esMovil || esAgricola);
+
+        if (resultCP.error) {
+            if (resultCP.error.corregido) {
+                advertencias.push(resultCP.error);
+                console.log(`✏️  ${resultCP.error.mensaje}`);
+            } else {
+                errores.push(resultCP.error);
+                console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
+            }
+        } else {
+            console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
+        }
+        datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
     }
-    datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
 
     console.log("=".repeat(70));
 
@@ -588,117 +598,27 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
  * Función principal: valida y corrige todos los datos de una estación (CON coordenadas)
  */
 export function validarYCorregirEstacion(estacion: any, origen: string): ResultadoValidacion {
-    const errores: ErrorValidacion[] = [];
-    const advertencias: ErrorValidacion[] = [];
-    const datosCorregidos: any = { ...estacion };
+    // Primero validar los datos básicos sin coordenadas
+    const resultadoBase = validarYCorregirEstacionSinCoordenadas(estacion, origen);
 
-    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || "Sin nombre"}`);
-    console.log("=".repeat(70));
-
-    // Determinar si es móvil
-    const tipoEstacion = estacion["TIPO ESTACIÓN"] || estacion["TIPO ESTACION"] || "";
-    const esMovil = normalizar(String(tipoEstacion)).includes("movil");
-
-    // 1. PROVINCIA
-    const provinciaOriginal = estacion.PROVINCIA || estacion.provincia || estacion.serveis_territorials;
-    const resultProvincia = validarYCorregirProvincia(provinciaOriginal);
-    
-    if (resultProvincia.error) {
-        if (resultProvincia.error.corregido) {
-            advertencias.push(resultProvincia.error);
-            console.log(`✏️  ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
-        } else {
-            errores.push(resultProvincia.error);
-            console.log(`❌ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
-        }
-    } else {
-        console.log(`✅ PROVINCIA: "${resultProvincia.valorCorregido}"`);
-    }
-    datosCorregidos.PROVINCIA = resultProvincia.valorCorregido;
-
-    // 2. MUNICIPIO
-    const municipioOriginal = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi;
-    const resultMunicipio = validarYCorregirMunicipio(municipioOriginal, esMovil);
-    
-    if (resultMunicipio.error) {
-        if (resultMunicipio.error.corregido) {
-            advertencias.push(resultMunicipio.error);
-            console.log(`✏️  ${resultMunicipio.error.mensaje}`);
-        } else {
-            errores.push(resultMunicipio.error);
-            console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
-        }
-    } else if (resultMunicipio.valorCorregido) {
-        console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
-    }
-    datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
-
-    // 2.5. VALIDAR COHERENCIA MUNICIPIO-PROVINCIA
-    let provinciaFinal = resultProvincia.valorCorregido;
-    if (resultMunicipio.valorCorregido && resultProvincia.valorCorregido) {
-        const municipioNorm = normalizar(resultMunicipio.valorCorregido);
-        const provinciaCorrecta = MUNICIPIOS_PROVINCIAS[municipioNorm];
-        
-        if (provinciaCorrecta && provinciaCorrecta !== resultProvincia.valorCorregido) {
-            // El municipio pertenece a otra provincia
-            advertencias.push({
-                campo: "PROVINCIA",
-                valorOriginal: resultProvincia.valorCorregido,
-                valorCorregido: provinciaCorrecta,
-                mensaje: `Provincia corregida: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}" (${resultMunicipio.valorCorregido} pertenece a ${provinciaCorrecta})`,
-                corregido: true
-            });
-            console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
-            provinciaFinal = provinciaCorrecta;
-            datosCorregidos.PROVINCIA = provinciaCorrecta;
-        }
-    }
-
-    // 3. CÓDIGO POSTAL (validar con la provincia corregida)
-    const cpOriginal = estacion["C.POSTAL"] || estacion["CÓDIGO POSTAL"] || estacion["CDIGO POSTAL"] || estacion.cp;
-    const resultCP = validarYCorregirCodigoPostal(cpOriginal, provinciaFinal, esMovil);
-    
-    if (resultCP.error) {
-        if (resultCP.error.corregido) {
-            advertencias.push(resultCP.error);
-            console.log(`✏️  ${resultCP.error.mensaje}`);
-        } else {
-            errores.push(resultCP.error);
-            console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
-        }
-    } else {
-        console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
-    }
-    datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
-
-    // 4. COORDENADAS
+    // Validar coordenadas
     const lat = estacion.latitud || estacion.lat || 0;
     const lon = estacion.longitud || estacion.lon || 0;
     const erroresCoordenadas = validarCoordenadas(lat, lon);
-    
-    erroresCoordenadas.forEach(err => {
-        errores.push(err);
-        console.log(`❌ ${err.campo}: ${err.mensaje}`);
-    });
 
-    if (erroresCoordenadas.length === 0 && (lat !== 0 || lon !== 0)) {
-        console.log(`✅ COORDENADAS: ${lat}, ${lon}`);
+    // Si hay errores de coordenadas, añadirlos sin duplicar logs
+    if (erroresCoordenadas.length > 0) {
+        erroresCoordenadas.forEach(err => {
+            resultadoBase.errores.push(err);
+        });
     }
 
-    console.log("=".repeat(70));
-
-    const esValido = errores.length === 0;
-
-    if (esValido) {
-        console.log(`✅ ESTACIÓN VÁLIDA (${advertencias.length} corrección/correcciones aplicadas)`);
-    } else {
-        console.log(`❌ ESTACIÓN RECHAZADA: ${errores.length} error/errores críticos`);
-    }
+    const esValido = resultadoBase.errores.length === 0;
 
     return {
         esValido,
-        errores,
-        advertencias,
-        datosCorregidos
+        errores: resultadoBase.errores,
+        advertencias: resultadoBase.advertencias,
+        datosCorregidos: resultadoBase.datosCorregidos
     };
 }

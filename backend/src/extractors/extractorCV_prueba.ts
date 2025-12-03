@@ -2,7 +2,8 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
-import { validarYCorregirEstacion } from "../utils/validator";
+import { validarYCorregirEstacion, validarYCorregirEstacionSinCoordenadas } from "../utils/validator";
+import { validarCoordenadas } from "../utils/validator";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
 
 interface EstacionCV {
@@ -31,7 +32,6 @@ export async function loadCVDataPrueba() {
 
     for (const est of estaciones) {
         // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS (sin coordenadas aún)
-        const { validarYCorregirEstacionSinCoordenadas } = await import("../utils/validator");
         const validacion = validarYCorregirEstacionSinCoordenadas(est, "Comunidad Valenciana");
 
         if (!validacion.esValido) {
@@ -72,11 +72,18 @@ export async function loadCVDataPrueba() {
             url += "agricola";
         }
 
-        const nombre = `ITV de ${municipio}`;
-        const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
+        const nombre = tipoEstacion === "Estacion Movil"
+            ? `Estación Móvil - ${datos.PROVINCIA}`
+            : tipoEstacion === "Otros"
+                ? `Estación Agrícola - ${datos.PROVINCIA}`
+                : `Estación ITV ${municipio}`;
+        const descripcion = tipoEstacion === "Estacion Movil"
+            ? `Estación ITV Móvil provincia de ${datos.PROVINCIA} con código: ${est["Nº ESTACIÓN"]}`
+            : `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
         let coordenadas: { lat: number; lon: number } | null = null;
-        if (tipoEstacion !== "Estacion Movil") {
+        console.log(`Tipo de estación: ${tipoEstacion}`);
+        if (tipoEstacion !== "Estacion Movil" && tipoEstacion !== "Otros") {
             console.log(`📍 Geocodificando: ${municipio}...`);
             coordenadas = await geocodificarConSelenium(
                 est["DIRECCIÓN"] || "",
@@ -106,16 +113,15 @@ export async function loadCVDataPrueba() {
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
-            
+
             // Validar coordenadas después de obtenerlas
-            const { validarCoordenadas } = await import("../utils/validator");
             const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
-            
+
             if (erroresCoordenadas.length > 0) {
                 console.warn(`⚠️ Coordenadas fuera de rango:`);
                 erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
             }
-        } else {
+        } else if (tipoEstacion !== "Estacion Movil") {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
         }
 

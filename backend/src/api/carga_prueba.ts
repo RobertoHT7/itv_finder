@@ -7,13 +7,8 @@ export async function cargarTodosLosDatosPrueba() {
     console.log("==========================================\n");
 
     try {
-        console.log("Comunidad Valenciana...");
         await loadCVDataPrueba();
-
-        console.log("\nGalicia...");
         await loadGALDataPrueba();
-
-        console.log("\nCataluna...");
         await loadCATDataPrueba();
 
         console.log("\nProceso ETL completo y datos cargados en Supabase\n");
@@ -25,8 +20,6 @@ export async function cargarTodosLosDatosPrueba() {
 }
 
 export async function cargarCVDataPrueba() {
-    console.log("\nCargando datos de la Comunidad Valenciana...");
-    console.log("==========================================\n");
     try {
         await loadCVDataPrueba();
     } catch (error) {
@@ -35,8 +28,6 @@ export async function cargarCVDataPrueba() {
 }
 
 export async function cargarGALDataPrueba() {
-    console.log("\nCargando datos de Galicia...");
-    console.log("==========================================\n");
     try {
         await loadGALDataPrueba();
     } catch (error) {
@@ -45,8 +36,6 @@ export async function cargarGALDataPrueba() {
 }
 
 export async function cargarCATDataPrueba() {
-    console.log("\nCargando datos de Cataluña...");
-    console.log("==========================================\n");
     try {
         await loadCATDataPrueba();
     } catch (error) {
