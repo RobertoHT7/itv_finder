@@ -106,46 +106,16 @@ const MUNICIPIOS_PROVINCIAS: { [municipio: string]: string } = {
     "vilagarcía": "Pontevedra",
 };
 
-// Mapeo exhaustivo de errores comunes y variantes
-const PROVINCIAS_CORRECCIONES: { [key: string]: string } = {
-    // Comunidad Valenciana
-    "aligante": "Alicante",
-    "aligant": "Alicante",
-    "alicate": "Alicante",
+// Mapeo de nombres alternativos oficiales (ej: catalán/castellano)
+const NOMBRES_ALTERNATIVOS: { [key: string]: string } = {
+    // Nombres en catalán/valenciano
     "alacant": "Alicante",
-    "castellon": "Castellón",
     "castello": "Castellón",
-    "castelló": "Castellón",
-    "castello de la plana": "Castellón",
-    "valencia": "Valencia",
-    "valencià": "Valencia",
-    "vagencia": "Valencia",
-    "valencua": "Valencia",
-    "valncia": "Valencia",
-    "vaencia": "Valencia",
-    // Galicia
-    "coruna": "A Coruña",
-    "coruña": "A Coruña",
-    "a coruna": "A Coruña",
-    "la coruña": "A Coruña",
-    "orense": "Ourense",
-    "lugo": "Lugo",
-    "pontevedra": "Pontevedra",
-    "pontevdra": "Pontevedra",
-    "pontevdera": "Pontevedra",
-    // Cataluña
-    "barcelona": "Barcelona",
-    "barcleona": "Barcelona",
-    "barselona": "Barcelona",
-    "barchelona": "Barcelona",
-    "gerona": "Girona",
     "girona": "Girona",
-    "lerida": "Lleida",
     "lleida": "Lleida",
-    "lérida": "Lleida",
-    "tarragona": "Tarragona",
-    "tarragon": "Tarragona",
-    "taragon": "Tarragona",
+    // Nombres en gallego/castellano
+    "orense": "Ourense",
+    "la coruña": "A Coruña",
 };
 
 export interface ErrorValidacion {
@@ -237,26 +207,37 @@ function corregirProvincia(provincia: string): { corregido: string; cambio: bool
     const provinciaTrim = provincia.trim();
     const normalizado = normalizar(provinciaTrim);
 
-    // Buscar en correcciones conocidas
-    if (PROVINCIAS_CORRECCIONES[normalizado]) {
-        return {
-            corregido: PROVINCIAS_CORRECCIONES[normalizado],
-            cambio: true
-        };
-    }
-
-    // Buscar coincidencia exacta normalizada
+    // 1. Buscar coincidencia exacta (sin normalizar primero)
     for (const provinciaValida of PROVINCIAS_VALIDAS) {
-        if (normalizar(provinciaValida) === normalizado) {
-            // Solo marcar como cambio si el texto original es diferente
+        if (provinciaTrim === provinciaValida) {
+            // Coincidencia exacta, no hay cambio
             return {
                 corregido: provinciaValida,
-                cambio: provinciaTrim !== provinciaValida
+                cambio: false
             };
         }
     }
 
-    // Buscar similitud con Levenshtein (tolerancia de 2 caracteres)
+    // 2. Buscar en nombres alternativos oficiales
+    if (NOMBRES_ALTERNATIVOS[normalizado]) {
+        return {
+            corregido: NOMBRES_ALTERNATIVOS[normalizado],
+            cambio: true
+        };
+    }
+
+    // 3. Buscar coincidencia normalizada (sin tildes, minúsculas)
+    for (const provinciaValida of PROVINCIAS_VALIDAS) {
+        if (normalizar(provinciaValida) === normalizado) {
+            // Coincidencia normalizada (solo difiere en tildes/mayúsculas)
+            return {
+                corregido: provinciaValida,
+                cambio: true
+            };
+        }
+    }
+
+    // 4. Buscar similitud con Levenshtein (tolerancia de 2 caracteres para errores tipográficos)
     let mejorCandidato = provinciaTrim;
     let menorDistancia = Infinity;
 
@@ -268,9 +249,12 @@ function corregirProvincia(provincia: string): { corregido: string; cambio: bool
         }
     }
 
+    // Si encontró algo similar, marcarlo como cambio
+    const huboCorreccion = mejorCandidato !== provinciaTrim;
+
     return {
         corregido: mejorCandidato,
-        cambio: mejorCandidato !== provinciaTrim
+        cambio: huboCorreccion
     };
 }
 
@@ -576,15 +560,7 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
         datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
     }
 
-    console.log("=".repeat(70));
-
     const esValido = errores.length === 0;
-
-    if (esValido) {
-        console.log(`✅ ESTACIÓN VÁLIDA (${advertencias.length} corrección/correcciones aplicadas)`);
-    } else {
-        console.log(`❌ ESTACIÓN RECHAZADA: ${errores.length} error/errores críticos`);
-    }
 
     return {
         esValido,
@@ -601,16 +577,30 @@ export function validarYCorregirEstacion(estacion: any, origen: string): Resulta
     // Primero validar los datos básicos sin coordenadas
     const resultadoBase = validarYCorregirEstacionSinCoordenadas(estacion, origen);
 
-    // Validar coordenadas
+    // Si la validación base ya falló, no validar coordenadas
+    if (!resultadoBase.esValido) {
+        console.log("\n" + "=".repeat(70));
+        console.log(`❌ ESTACIÓN RECHAZADA: ${resultadoBase.errores.length} error/errores críticos`);
+        return resultadoBase;
+    }
+
+    // Validar coordenadas solo si la validación base fue exitosa
     const lat = estacion.latitud || estacion.lat || 0;
     const lon = estacion.longitud || estacion.lon || 0;
     const erroresCoordenadas = validarCoordenadas(lat, lon);
 
-    // Si hay errores de coordenadas, añadirlos sin duplicar logs
+    // Si hay errores de coordenadas, mostrarlos y agregarlos
     if (erroresCoordenadas.length > 0) {
         erroresCoordenadas.forEach(err => {
             resultadoBase.errores.push(err);
+            console.log(`❌ ${err.campo}: ${err.mensaje}`);
         });
+        console.log("\n" + "=".repeat(70));
+        console.log(`❌ ESTACIÓN RECHAZADA: ${erroresCoordenadas.length} error/errores de coordenadas`);
+    } else if (lat !== 0 && lon !== 0) {
+        console.log(`\n✅ COORDENADAS VÁLIDAS: ${lat}, ${lon}`);
+        console.log("\n" + "=".repeat(70));
+        console.log(`✅ ESTACIÓN VÁLIDA (${resultadoBase.advertencias.length} corrección/correcciones aplicadas)`);
     }
 
     const esValido = resultadoBase.errores.length === 0;

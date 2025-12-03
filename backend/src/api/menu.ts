@@ -32,8 +32,7 @@ function mostrarMenu() {
     console.log("1. Ver estadisticas de la base de datos");
     console.log("2. Cargar datos (ETL completo)");
     console.log("3. Limpiar base de datos");
-    console.log("4. Consultar estaciones");
-    console.log("5. Salir\n");
+    console.log("4. Salir\n");
 }
 
 /**
@@ -268,17 +267,13 @@ export async function iniciarMenu() {
                 break;
 
             case "4":
-                await consultarEstaciones();
-                break;
-
-            case "5":
                 console.log("\nHasta luego!\n");
                 continuar = false;
                 rl.close();
                 break;
 
             default:
-                console.log("\nOpcion no valida. Por favor, selecciona una opcion del 1 al 5.\n");
+                console.log("\nOpcion no valida. Por favor, selecciona una opcion del 1 al 4.\n");
         }
     }
 }

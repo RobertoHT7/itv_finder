@@ -8,27 +8,27 @@ import { validarYCorregirEstacion } from "../utils/validator";
 // Función para normalizar coordenadas al rango correcto de España
 function normalizarCoordenada(valor: number, esLatitud: boolean): number {
     if (valor === 0) return 0;
-    
+
     // Rangos válidos para España
     const rangoLat = { min: 27, max: 44 };
     const rangoLon = { min: -19, max: 5 };
-    
+
     const rango = esLatitud ? rangoLat : rangoLon;
-    
+
     // Mantener el signo original
     const signo = valor < 0 ? -1 : 1;
     const valorAbs = Math.abs(valor);
-    
+
     // Probar diferentes divisores hasta encontrar uno que esté en el rango
     const divisores = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
-    
+
     for (const divisor of divisores) {
         const resultado = (valorAbs / divisor) * signo;
         if (resultado >= rango.min && resultado <= rango.max) {
             return resultado;
         }
     }
-    
+
     // Si ningún divisor funciona, devolver 0 (coordenada inválida)
     console.warn(`⚠️ No se pudo normalizar coordenada ${valor} (${esLatitud ? 'lat' : 'lon'})`);
     return 0;
@@ -54,7 +54,7 @@ export async function loadCATDataPrueba() {
         const municipi = est.municipi?.[0];
         const provinciaRaw = est.serveis_territorials?.[0];
         const operador = est.operador?.[0];
-        
+
         // Extraer nombre de provincia limpio (ej: "Serveis Territorials de Tarragona" → "Tarragona")
         let provincia = provinciaRaw;
         if (provinciaRaw && provinciaRaw.includes(" de ")) {
