@@ -119,7 +119,7 @@ export async function loadGALDataPrueba() {
                         continue;
                     }
 
-                    const nombre = `Estación ITV ${nombreOriginal}`;
+                    const nombre = `${nombreOriginal}`;
                     const contacto = `Tel: ${telefono || "N/A"} Email: ${email || "N/A"}`;
 
                     let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";

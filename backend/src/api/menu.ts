@@ -30,7 +30,7 @@ function mostrarMenu() {
     console.log("     MENU ADMINISTRACION ITV FINDER");
     console.log("==============================================\n");
     console.log("1. Ver estadisticas de la base de datos");
-    console.log("2. Cargar datos (ETL completo)");
+    console.log("2. Cargar datos");
     console.log("3. Limpiar base de datos");
     console.log("4. Salir\n");
 }
