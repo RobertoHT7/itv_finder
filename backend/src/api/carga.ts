@@ -1,69 +1,207 @@
+import { Request, Response } from "express";
 import { loadCVData } from "../extractors/extractorCV";
 import { loadGALData } from "../extractors/extractorGAL";
 import { loadCATData } from "../extractors/extractorCAT";
+import { supabase } from "../db/supabaseClient";
 
 /**
- * Carga todos los datos de las estaciones ITV
- * desde todas las comunidades autónomas disponibles
+ * POST /api/carga/all
+ * Carga todos los datos de las estaciones ITV desde todas las comunidades
+ * Query params opcionales: source=data|data_prueba (por defecto: data)
  */
-export async function cargarTodosLosDatos() {
-    console.log("\nIniciando carga completa de datos ITV...");
-    console.log("==========================================\n");
-
+export const cargarTodosLosDatos = async (req: Request, res: Response) => {
     try {
-        console.log("Comunidad Valenciana...");
-        await loadCVData();
-       
-        // console.log("\nGalicia...");
-        // await loadGALData();
+        const source = (req.query.source as string) || "data";
 
-        // console.log("\nCataluna...");
-        // await loadCATData();
+        if (source !== "data" && source !== "data_prueba") {
+            return res.status(400).json({
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+            });
+        }
 
-        console.log("\nProceso ETL completo y datos cargados en Supabase\n");
-        return { success: true };
-    } catch (error) {
-        console.error("\nError en la carga de datos:", error);
-        return { success: false, error };
-    }
-}
+        console.log(`\n🔄 Iniciando carga completa desde: ${source}`);
+        console.log("==========================================\n");
 
-export async function cargarCVData() {
-    console.log("\nCargando datos de la Comunidad Valenciana...");
-    console.log("==========================================\n");
-    try {
-        await loadCVData();
-    } catch (error) {
-        console.error("Error cargando datos de la Comunidad Valenciana:", error);
-    }
-}
+        await loadCVData(source);
+        await loadGALData(source);
+        await loadCATData(source);
 
-export async function cargarGALData() {
-    console.log("\nCargando datos de Galicia...");
-    console.log("==========================================\n");
-    try {
-        await loadGALData();
-    } catch (error) {
-        console.error("Error cargando datos de Galicia:", error);
-    }
-}
+        console.log("\n✅ Proceso ETL completo\n");
 
-export async function cargarCATData() {
-    console.log("\nCargando datos de Cataluña...");
-    console.log("==========================================\n");
-    try {
-        await loadCATData();
-    } catch (error) {
-        console.error("Error cargando datos de Cataluña:", error);
-    }
-}
-
-// Si se ejecuta directamente desde la línea de comandos
-if (require.main === module) {
-    cargarTodosLosDatos()
-        .then(() => process.exit(0))
-        .catch((err) => {
-            console.error(err);
-            process.exit(1);
+        return res.status(201).json({
+            success: true,
+            message: "Carga completa exitosa",
+            source: source
         });
-}
+
+    } catch (error) {
+        console.error("❌ Error en carga completa:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error interno al cargar datos"
+        });
+    }
+};
+
+/**
+ * POST /api/carga/cv
+ * Carga datos de la Comunidad Valenciana
+ * Query params opcionales: source=data|data_prueba
+ */
+export const cargarCVData = async (req: Request, res: Response) => {
+    try {
+        const source = (req.query.source as string) || "data";
+
+        if (source !== "data" && source !== "data_prueba") {
+            return res.status(400).json({
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+            });
+        }
+
+        console.log(`\n🔄 Cargando Comunidad Valenciana desde: ${source}\n`);
+        await loadCVData(source);
+        console.log("✅ Carga CV completada\n");
+
+        return res.status(201).json({
+            success: true,
+            message: "Datos de Comunidad Valenciana cargados exitosamente",
+            source: source
+        });
+
+    } catch (error) {
+        console.error("❌ Error cargando CV:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al cargar datos de Comunidad Valenciana"
+        });
+    }
+};
+
+/**
+ * POST /api/carga/gal
+ * Carga datos de Galicia
+ * Query params opcionales: source=data|data_prueba
+ */
+export const cargarGALData = async (req: Request, res: Response) => {
+    try {
+        const source = (req.query.source as string) || "data";
+
+        if (source !== "data" && source !== "data_prueba") {
+            return res.status(400).json({
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+            });
+        }
+
+        console.log(`\n🔄 Cargando Galicia desde: ${source}\n`);
+        await loadGALData(source);
+        console.log("✅ Carga GAL completada\n");
+
+        return res.status(201).json({
+            success: true,
+            message: "Datos de Galicia cargados exitosamente",
+            source: source
+        });
+
+    } catch (error) {
+        console.error("❌ Error cargando GAL:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al cargar datos de Galicia"
+        });
+    }
+};
+
+/**
+ * POST /api/carga/cat
+ * Carga datos de Cataluña
+ * Query params opcionales: source=data|data_prueba
+ */
+export const cargarCATData = async (req: Request, res: Response) => {
+    try {
+        const source = (req.query.source as string) || "data";
+
+        if (source !== "data" && source !== "data_prueba") {
+            return res.status(400).json({
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+            });
+        }
+
+        console.log(`\n🔄 Cargando Cataluña desde: ${source}\n`);
+        await loadCATData(source);
+        console.log("✅ Carga CAT completada\n");
+
+        return res.status(201).json({
+            success: true,
+            message: "Datos de Cataluña cargados exitosamente",
+            source: source
+        });
+
+    } catch (error) {
+        console.error("❌ Error cargando CAT:", error);
+        return res.status(500).json({
+            success: false,
+            error: "Error al cargar datos de Cataluña"
+        });
+    }
+};
+
+/**
+ * GET /api/carga/estadisticas
+ * Devuelve estadísticas de cuántas estaciones hay cargadas por comunidad
+ */
+export const obtenerEstadisticasCarga = async (req: Request, res: Response) => {
+    try {
+        // Obtener todas las provincias con sus estaciones
+        const { data: provincias, error } = await supabase
+            .from("provincia")
+            .select(`
+                id,
+                nombre,
+                localidad (
+                    id,
+                    estacion (id)
+                )
+            `);
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        // Agrupar por comunidad autónoma
+        const stats = {
+            comunidad_valenciana: 0,
+            galicia: 0,
+            cataluna: 0,
+            total: 0
+        };
+
+        provincias?.forEach((prov: any) => {
+            const numEstaciones = prov.localidad?.reduce(
+                (acc: number, loc: any) => acc + (loc.estacion?.length || 0),
+                0
+            ) || 0;
+
+            // Clasificar por comunidad
+            if (["Valencia", "Castellón", "Alicante"].includes(prov.nombre)) {
+                stats.comunidad_valenciana += numEstaciones;
+            } else if (["A Coruña", "Lugo", "Ourense", "Pontevedra"].includes(prov.nombre)) {
+                stats.galicia += numEstaciones;
+            } else if (["Barcelona", "Girona", "Lleida", "Tarragona"].includes(prov.nombre)) {
+                stats.cataluna += numEstaciones;
+            }
+
+            stats.total += numEstaciones;
+        });
+
+        return res.status(200).json({
+            estadisticas: stats,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error("Error obteniendo estadísticas:", error);
+        return res.status(500).json({
+            error: "Error al obtener estadísticas"
+        });
+    }
+};

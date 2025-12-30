@@ -2,48 +2,51 @@ import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
+import { validarYCorregirEstacion, validarYCorregirEstacionSinCoordenadas } from "../utils/validator";
+import { validarCoordenadas } from "../utils/validator";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
-import { SELENIUM_CONFIG } from "../utils/seleniumConfig";
-import { validarYCorregirEstacion } from "../utils/validator";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
     PROVINCIA: string;
     MUNICIPIO: string;
-    "C.POSTAL": number;
+    "C.POSTAL": number | string;
     "DIRECCIÓN": string;
     "Nº ESTACIÓN": number;
     HORARIOS: string;
     CORREO: string;
 }
 
-export async function loadCVData() {
-    const filePath = path.join(__dirname, "../../data/estaciones.json");
+export async function loadCVData(dataFolder: string = "data") {
+    const filePath = path.join(__dirname, `../../${dataFolder}/estaciones.json`);
     const rawData = fs.readFileSync(filePath, "utf-8");
     const estaciones: EstacionCV[] = JSON.parse(rawData);
 
-    console.log(`\n🔄 Cargando ${estaciones.length} estaciones de Comunidad Valenciana...`);
-    
+    const source = dataFolder === "data_prueba" ? "PRUEBA" : "PRODUCCIÓN";
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`🔄 [COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`);
+    console.log(`${"=".repeat(80)}\n`);
+
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
 
     for (const est of estaciones) {
-        // VALIDAR Y CORREGIR DATOS (sin coordenadas aún)
-        const { validarYCorregirEstacionSinCoordenadas } = await import("../utils/validator");
+        // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS (sin coordenadas aún)
         const validacion = validarYCorregirEstacionSinCoordenadas(est, "Comunidad Valenciana");
-        
+
         if (!validacion.esValido) {
             rechazadas++;
-            console.log(`⛔ Estación rechazada por errores críticos\n`);
+            console.log(`\n🚫 La estación será RECHAZADA por errores críticos\n`);
             continue;
         }
 
-        // Usar datos corregidos
+        console.log(`\n✅ Estación validada, procediendo a la geocodificación e inserción...\n`);
+
+        // 🔍 PROCESAMIENTO CON DATOS CORREGIDOS
         const datos = validacion.datosCorregidos;
-        
-        const rawTipo = datos["TIPO ESTACIÓN"] || est["TIPO ESTACIÓN"] || "";
-        const municipio = datos.MUNICIPIO || datos.PROVINCIA;
+        const rawTipo = est["TIPO ESTACIÓN"] || "";
+        const municipio = datos.MUNICIPIO || datos.PROVINCIA || "Desconocido";
         const codigoPostal = datos["C.POSTAL"];
 
         const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
@@ -58,13 +61,11 @@ export async function loadCVData() {
             continue;
         }
 
-        // 2. Transformación de TIPO 
         let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
         if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
         else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "Estacion Movil";
         else tipoEstacion = "Otros";
 
-        // 3. Transformación de URL 
         let url = "https://sitval.com/centros/";
         if (tipoEstacion === "Estacion Movil") {
             url += "movil";
@@ -72,26 +73,33 @@ export async function loadCVData() {
             url += "agricola";
         }
 
-        // 4. Transformación de NOMBRE 
-        const nombre = `ITV de ${municipio}`;
+        const nombre = tipoEstacion === "Estacion Movil"
+            ? `Estación Móvil - ${datos.PROVINCIA}`
+            : tipoEstacion === "Otros"
+                ? `Estación Agrícola - ${datos.PROVINCIA}`
+                : `Estación ITV ${municipio}`;
+        const descripcion = tipoEstacion === "Estacion Movil"
+            ? `Estación ITV Móvil provincia de ${datos.PROVINCIA} con código: ${est["Nº ESTACIÓN"]}`
+            : `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
-        // 5. Transformación de DESCRIPCIÓN 
-        const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
+        let coordenadas: { lat: number; lon: number } | null = null;
+        console.log(`Tipo de estación: ${tipoEstacion}`);
+        if (tipoEstacion !== "Estacion Movil" && tipoEstacion !== "Otros") {
+            console.log(`📍 Geocodificando: ${municipio}...`);
+            coordenadas = await geocodificarConSelenium(
+                est["DIRECCIÓN"] || "",
+                municipio,
+                est.PROVINCIA,
+                codigoPostal
+            );
+        } else {
+            console.log(`Estación móvil, se omite geocodificación.`);
+        }
 
-        // 6. Geocodificación de la dirección usando Selenium
-        console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
-        const coordenadas = await geocodificarConSelenium(
-            est["DIRECCIÓN"] || "",
-            municipio,
-            datos.PROVINCIA,
-            codigoPostal
-        );
-
-        // Pequeño delay entre peticiones para no sobrecargar
-        await delay(SELENIUM_CONFIG.DELAY_BETWEEN_REQUESTS);
+        await delay(500);
 
         const estacionData = {
-            nombre: `ITV ${municipio} ${est["Nº ESTACIÓN"]}`,
+            nombre: nombre,
             tipo: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
             codigo_postal: codigoPostal,
@@ -100,22 +108,21 @@ export async function loadCVData() {
             descripcion: descripcion,
             horario: est.HORARIOS || "No especificado",
             contacto: est.CORREO || "Sin contacto",
-            url: "https://sitval.com/",
+            url: url,
             localidadId,
         };
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
-            
+
             // Validar coordenadas después de obtenerlas
-            const { validarCoordenadas } = await import("../utils/validator");
             const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
-            
+
             if (erroresCoordenadas.length > 0) {
                 console.warn(`⚠️ Coordenadas fuera de rango:`);
                 erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
             }
-        } else {
+        } else if (tipoEstacion !== "Estacion Movil") {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
         }
 
@@ -126,19 +133,20 @@ export async function loadCVData() {
 
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
-            console.error("❌ Error insertando estación:", error.message);
+            console.error("❌ Error insertando estación CV:", error.message);
             rechazadas++;
         } else {
+            console.log(`✅ Estación insertada correctamente en la base de datos\n`);
             cargadas++;
         }
     }
-    
-    console.log("\n" + "=".repeat(70));
-    console.log("📊 RESUMEN DE CARGA - COMUNIDAD VALENCIANA");
-    console.log("=".repeat(70));
+
+    console.log(`\n${"=".repeat(80)}`);
+    console.log(`📊 RESUMEN COMUNIDAD VALENCIANA - PRUEBA`);
+    console.log(`${"=".repeat(80)}`);
     console.log(`✅ Estaciones cargadas: ${cargadas}`);
     console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
     console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
     console.log(`📝 Total procesadas: ${estaciones.length}`);
-    console.log("=".repeat(70) + "\n");
+    console.log(`${"=".repeat(80)}\n`);
 }

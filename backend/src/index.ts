@@ -2,36 +2,26 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
+// API de Búsqueda Unificada
+import { buscarEstaciones } from "./api/busqueda";
+
+// API de Carga (ETL)
 import {
-    getCVStations,
-    getCVStationsByProvincia,
-    getCVStationsByMunicipio,
-    getCVStationsByTipo,
-    getCVStationsNearby
-} from "./wrappers/wrapperCV";
-import {
-    getGALStations,
-    getGALStationsByProvincia,
-    getGALStationsByConcello,
-    getGALStationsByTipo,
-    getGALStationsNearby,
-    getGALStats
-} from "./wrappers/wrapperGAL";
-import {
-    getCATStations,
-    getCATStationsByProvincia,
-    getCATStationsByMunicipi,
-    getCATStationsByOperador,
-    getCATStationsNearby,
-    getCATStats
-} from "./wrappers/wrapperCAT";
-import { loadCVData } from "./extractors/extractorCV";
-import { loadGALData } from "./extractors/extractorGAL";
-import { loadCATData } from "./extractors/extractorCAT";
+    cargarTodosLosDatos,
+    cargarCVData,
+    cargarGALData,
+    cargarCATData,
+    obtenerEstadisticasCarga
+} from "./api/carga";
+
+// Wrappers (Simulación de Fuentes Originales)
+import { getWrapperCV } from "./wrappers/wrapperCV.js";
+import { getWrapperGAL } from "./wrappers/wrapperGAL.js";
+import { getWrapperCAT } from "./wrappers/wrapperCAT.js";
+
+// Utilidades
 import { limpiarBaseDeDatos } from "./api/limpiar";
-import { cargarTodosLosDatos } from "./api/carga";
 import { obtenerEstadisticas } from "./api/estadisticas";
-import { iniciarMenu } from "./api/menu";
 
 dotenv.config();
 
@@ -39,37 +29,38 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req: Request, res: Response) => res.json({ status: "API ITV Finder running" }));
+app.get("/", (req: Request, res: Response) => res.json({
+    status: "API ITV Finder running",
+    version: "2.0",
+    endpoints: {
+        busqueda: "GET /api/estaciones",
+        carga: "POST /api/carga/*",
+        wrappers: "GET /api/wrapper/*",
+        admin: "DELETE /api/limpiar, GET /api/estadisticas"
+    }
+}));
 
-// ==================== ENDPOINTS COMUNIDAD VALENCIANA ====================
-app.get("/api/cv", getCVStations);
-app.get("/api/cv/provincia/:provincia", getCVStationsByProvincia);
-app.get("/api/cv/municipio/:municipio", getCVStationsByMunicipio);
-app.get("/api/cv/tipo/:tipo", getCVStationsByTipo);
-app.get("/api/cv/nearby", getCVStationsNearby);
+// ==================== API DE BÚSQUEDA UNIFICADA ====================
+app.get("/api/estaciones", buscarEstaciones);
 
-// ==================== ENDPOINTS GALICIA ====================
-app.get("/api/gal", getGALStations);
-app.get("/api/gal/provincia/:provincia", getGALStationsByProvincia);
-app.get("/api/gal/concello/:concello", getGALStationsByConcello);
-app.get("/api/gal/tipo/:tipo", getGALStationsByTipo);
-app.get("/api/gal/nearby", getGALStationsNearby);
-app.get("/api/gal/stats", getGALStats);
+// ==================== API DE CARGA (ETL) ====================
+app.post("/api/carga/all", cargarTodosLosDatos);
+app.post("/api/carga/cv", cargarCVData);
+app.post("/api/carga/gal", cargarGALData);
+app.post("/api/carga/cat", cargarCATData);
+app.get("/api/carga/estadisticas", obtenerEstadisticasCarga);
 
-// ==================== ENDPOINTS CATALUÑA ====================
-app.get("/api/cat", getCATStations);
-app.get("/api/cat/provincia/:provincia", getCATStationsByProvincia);
-app.get("/api/cat/municipi/:municipi", getCATStationsByMunicipi);
-app.get("/api/cat/operador/:operador", getCATStationsByOperador);
-app.get("/api/cat/nearby", getCATStationsNearby);
-app.get("/api/cat/stats", getCATStats);
+// ==================== WRAPPERS (SIMULACIÓN DE FUENTES ORIGINALES) ====================
+app.get("/api/wrapper/cv", getWrapperCV);
+app.get("/api/wrapper/gal", getWrapperGAL);
+app.get("/api/wrapper/cat", getWrapperCAT);
 
-// ==================== ENDPOINT LIMPIAR BD ====================
+// ==================== ADMINISTRACIÓN ====================
 app.delete("/api/limpiar", async (req: Request, res: Response) => {
     try {
         const result = await limpiarBaseDeDatos();
         if (result.success) {
-            res.json({ message: "Base de datos limpiada correctamente" });
+            res.status(200).json({ message: "Base de datos limpiada correctamente" });
         } else {
             res.status(500).json({ error: "Error al limpiar base de datos" });
         }
@@ -78,30 +69,16 @@ app.delete("/api/limpiar", async (req: Request, res: Response) => {
     }
 });
 
-// ==================== ENDPOINTS ADMINISTRACIÓN ====================
 app.get("/api/estadisticas", async (req: Request, res: Response) => {
     try {
         const result = await obtenerEstadisticas();
         if (result.success) {
-            res.json({ estadisticas: result.data });
+            res.status(200).json({ estadisticas: result.data });
         } else {
             res.status(500).json({ error: "Error al obtener estadísticas" });
         }
     } catch (error) {
         res.status(500).json({ error: "Error al obtener estadísticas" });
-    }
-});
-
-app.post("/api/carga", async (req: Request, res: Response) => {
-    try {
-        const result = await cargarTodosLosDatos();
-        if (result.success) {
-            res.json({ message: "Datos cargados correctamente" });
-        } else {
-            res.status(500).json({ error: "Error al cargar datos" });
-        }
-    } catch (error) {
-        res.status(500).json({ error: "Error al cargar datos" });
     }
 });
 
@@ -111,9 +88,7 @@ app.listen(PORT, async () => {
     console.log("==============================================");
     console.log("                 ITV FINDER");
     console.log("==============================================\n");
-    console.log(`Servidor ejecutandose en el puerto ${PORT}`);
+    console.log(`Servidor ejecutándose en el puerto ${PORT}`);
     console.log(`URL: http://localhost:${PORT}\n`);
-
-    // Iniciar menú interactivo
-    await iniciarMenu();
+    console.log("API Rest lista para recibir peticiones ✅\n");
 });

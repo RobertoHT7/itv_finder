@@ -16,7 +16,7 @@ const PROVINCIAS_VALIDAS = [
 ];
 
 // Mapeo de municipios conocidos a sus provincias correctas
-const MUNICIPIOS_PROVINCIAS: { [municipio: string]: string } = {
+const MUNICIPIOS_PROVINCIAS: { [municipio: string]: string } = { //Mapear cp con provincia
     // Barcelona
     "barcelona": "Barcelona",
     "sabadell": "Barcelona",
