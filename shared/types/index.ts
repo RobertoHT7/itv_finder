@@ -8,3 +8,6 @@ export * from "./database.types";
 
 // Exportar todas las funciones de ayuda y validación
 export * from "./helpers";
+
+// Exportar todos los tipos de API REST
+export * from "./api.types";

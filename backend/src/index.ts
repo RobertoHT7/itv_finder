@@ -11,13 +11,14 @@ import {
     cargarCVData,
     cargarGALData,
     cargarCATData,
-    obtenerEstadisticasCarga
+    obtenerEstadisticasCarga,
+    streamLogs
 } from "./api/carga";
 
 // Wrappers (Simulación de Fuentes Originales)
-import { getWrapperCV } from "./wrappers/wrapperCV.js";
-import { getWrapperGAL } from "./wrappers/wrapperGAL.js";
-import { getWrapperCAT } from "./wrappers/wrapperCAT.js";
+import { getWrapperCV } from "./wrappers/wrapperCV";
+import { getWrapperGAL } from "./wrappers/wrapperGAL";
+import { getWrapperCAT } from "./wrappers/wrapperCAT";
 
 // Utilidades
 import { limpiarBaseDeDatos } from "./api/limpiar";
@@ -35,6 +36,7 @@ app.get("/", (req: Request, res: Response) => res.json({
     endpoints: {
         busqueda: "GET /api/estaciones",
         carga: "POST /api/carga/*",
+        logs: "GET /api/carga/logs (SSE)",
         wrappers: "GET /api/wrapper/*",
         admin: "DELETE /api/limpiar, GET /api/estadisticas"
     }
@@ -49,6 +51,7 @@ app.post("/api/carga/cv", cargarCVData);
 app.post("/api/carga/gal", cargarGALData);
 app.post("/api/carga/cat", cargarCATData);
 app.get("/api/carga/estadisticas", obtenerEstadisticasCarga);
+app.get("/api/carga/logs", streamLogs); // SSE para logs en tiempo real
 
 // ==================== WRAPPERS (SIMULACIÓN DE FUENTES ORIGINALES) ====================
 app.get("/api/wrapper/cv", getWrapperCV);

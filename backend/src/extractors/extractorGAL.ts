@@ -5,39 +5,6 @@ import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
 
-// Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
-function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
-    if (!coordString) return { lat: 0, lon: 0 };
-
-    const cleanStr = coordString.replace(/'/g, "").trim();
-    const parts = cleanStr.split(",").map(s => s.trim());
-
-    if (parts.length !== 2) return { lat: 0, lon: 0 };
-
-    if (parts[0].includes("°")) {
-        const parseDM = (str: string) => {
-            const negative = str.includes("-");
-            const cleanNum = str.replace("-", "").trim();
-            const [grados, minutos] = cleanNum.split("°").map(s => s.trim());
-            const g = parseFloat(grados);
-            const m = parseFloat(minutos);
-
-            if (isNaN(g) || isNaN(m)) return 0;
-
-            const decimal = g + (m / 60);
-            return negative ? -decimal : decimal;
-        };
-        return { lat: parseDM(parts[0]), lon: parseDM(parts[1]) };
-    }
-
-    const lat = parseFloat(parts[0]);
-    const lon = parseFloat(parts[1]);
-
-    if (isNaN(lat) || isNaN(lon)) return { lat: 0, lon: 0 };
-
-    return { lat, lon };
-}
-
 export async function loadGALData(dataFolder: string = "data") {
     const filePath = path.join(__dirname, `../../${dataFolder}/Estacions_ITV.csv`);
     const results: any[] = [];
@@ -163,4 +130,37 @@ export async function loadGALData(dataFolder: string = "data") {
             })
             .on("error", reject);
     });
+}
+
+// Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
+function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
+    if (!coordString) return { lat: 0, lon: 0 };
+
+    const cleanStr = coordString.replace(/'/g, "").trim();
+    const parts = cleanStr.split(",").map(s => s.trim());
+
+    if (parts.length !== 2) return { lat: 0, lon: 0 };
+
+    if (parts[0].includes("°")) {
+        const parseDM = (str: string) => {
+            const negative = str.includes("-");
+            const cleanNum = str.replace("-", "").trim();
+            const [grados, minutos] = cleanNum.split("°").map(s => s.trim());
+            const g = parseFloat(grados);
+            const m = parseFloat(minutos);
+
+            if (isNaN(g) || isNaN(m)) return 0;
+
+            const decimal = g + (m / 60);
+            return negative ? -decimal : decimal;
+        };
+        return { lat: parseDM(parts[0]), lon: parseDM(parts[1]) };
+    }
+
+    const lat = parseFloat(parts[0]);
+    const lon = parseFloat(parts[1]);
+
+    if (isNaN(lat) || isNaN(lon)) return { lat: 0, lon: 0 };
+
+    return { lat, lon };
 }

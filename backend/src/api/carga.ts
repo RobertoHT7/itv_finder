@@ -3,15 +3,17 @@ import { loadCVData } from "../extractors/extractorCV";
 import { loadGALData } from "../extractors/extractorGAL";
 import { loadCATData } from "../extractors/extractorCAT";
 import { supabase } from "../db/supabaseClient";
+import { addSSEClient, broadcastLog } from "./sseLogger";
 
 /**
  * POST /api/carga/all
  * Carga todos los datos de las estaciones ITV desde todas las comunidades
- * Query params opcionales: source=data|data_prueba (por defecto: data)
+ * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
+ * Nota: data_prueba tiene encoding correcto UTF-8, data/ tiene problemas de encoding
  */
 export const cargarTodosLosDatos = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data";
+        const source = (req.query.source as string) || "data_prueba";
 
         if (source !== "data" && source !== "data_prueba") {
             return res.status(400).json({
@@ -21,12 +23,22 @@ export const cargarTodosLosDatos = async (req: Request, res: Response) => {
 
         console.log(`\n🔄 Iniciando carga completa desde: ${source}`);
         console.log("==========================================\n");
+        broadcastLog(`Iniciando carga completa desde: ${source}`, 'info');
 
+        broadcastLog('Cargando datos de Comunidad Valenciana...', 'info');
         await loadCVData(source);
+        broadcastLog('✓ Comunidad Valenciana completada', 'success');
+
+        broadcastLog('Cargando datos de Galicia...', 'info');
         await loadGALData(source);
+        broadcastLog('✓ Galicia completada', 'success');
+
+        broadcastLog('Cargando datos de Cataluña...', 'info');
         await loadCATData(source);
+        broadcastLog('✓ Cataluña completada', 'success');
 
         console.log("\n✅ Proceso ETL completo\n");
+        broadcastLog('🎉 Proceso ETL completo - Todas las estaciones cargadas', 'success');
 
         return res.status(201).json({
             success: true,
@@ -46,11 +58,11 @@ export const cargarTodosLosDatos = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/cv
  * Carga datos de la Comunidad Valenciana
- * Query params opcionales: source=data|data_prueba
+ * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
  */
 export const cargarCVData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data";
+        const source = (req.query.source as string) || "data_prueba";
 
         if (source !== "data" && source !== "data_prueba") {
             return res.status(400).json({
@@ -59,8 +71,10 @@ export const cargarCVData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Comunidad Valenciana desde: ${source}\n`);
+        broadcastLog(`Iniciando carga de Comunidad Valenciana (${source})`, 'info');
         await loadCVData(source);
         console.log("✅ Carga CV completada\n");
+        broadcastLog('✓ Comunidad Valenciana cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,
@@ -80,11 +94,11 @@ export const cargarCVData = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/gal
  * Carga datos de Galicia
- * Query params opcionales: source=data|data_prueba
+ * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
  */
 export const cargarGALData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data";
+        const source = (req.query.source as string) || "data_prueba";
 
         if (source !== "data" && source !== "data_prueba") {
             return res.status(400).json({
@@ -93,8 +107,10 @@ export const cargarGALData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Galicia desde: ${source}\n`);
+        broadcastLog(`Iniciando carga de Galicia (${source})`, 'info');
         await loadGALData(source);
         console.log("✅ Carga GAL completada\n");
+        broadcastLog('✓ Galicia cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,
@@ -114,11 +130,11 @@ export const cargarGALData = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/cat
  * Carga datos de Cataluña
- * Query params opcionales: source=data|data_prueba
+ * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
  */
 export const cargarCATData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data";
+        const source = (req.query.source as string) || "data_prueba";
 
         if (source !== "data" && source !== "data_prueba") {
             return res.status(400).json({
@@ -127,8 +143,10 @@ export const cargarCATData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Cataluña desde: ${source}\n`);
+        broadcastLog(`Iniciando carga de Cataluña (${source})`, 'info');
         await loadCATData(source);
         console.log("✅ Carga CAT completada\n");
+        broadcastLog('✓ Cataluña cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,
@@ -204,4 +222,14 @@ export const obtenerEstadisticasCarga = async (req: Request, res: Response) => {
             error: "Error al obtener estadísticas"
         });
     }
+};
+
+/**
+ * GET /api/carga/logs
+ * Endpoint de Server-Sent Events para recibir logs en tiempo real
+ * Los clientes se conectan y reciben actualizaciones mientras se cargan datos
+ */
+export const streamLogs = (req: Request, res: Response) => {
+    // Agregar cliente a la lista de SSE
+    addSSEClient(res);
 };

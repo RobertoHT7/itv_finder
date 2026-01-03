@@ -4,15 +4,19 @@
     "useDefineForClassFields": true,
     "lib": ["DOM", "ES2022"],
     "skipLibCheck": true,
-    "esModuleInterop": false,
     "allowSyntheticDefaultImports": true,
+    "strict": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@shared": ["../shared/types/index.ts"],
+      "@shared/*": ["../shared/types/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../shared/types"]
 }

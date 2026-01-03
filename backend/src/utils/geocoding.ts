@@ -54,52 +54,78 @@ export async function geocodificarConSelenium(
 ): Promise<GeocodeResult | null> {
     let driver: WebDriver | null = null;
     try {
-        driver = await new Builder().forBrowser(Browser.CHROME).build();
+        // Configurar Chrome con opciones headless y optimizadas
+        const chromeOptions = new chrome.Options();
+        SELENIUM_CONFIG.CHROME_OPTIONS.forEach(option => {
+            chromeOptions.addArguments(option);
+        });
+
+        // Crear driver con las opciones configuradas
+        driver = await new Builder()
+            .forBrowser(Browser.CHROME)
+            .setChromeOptions(chromeOptions)
+            .build();
+
+        // Configurar timeouts globales
+        await driver.manage().setTimeouts({
+            implicit: SELENIUM_CONFIG.TIMEOUT,
+            pageLoad: SELENIUM_CONFIG.TIMEOUT * 3,
+            script: SELENIUM_CONFIG.TIMEOUT
+        });
+
+        console.log("🌐 Abriendo Google Maps...");
         await driver.get('https://www.google.com/maps?hl=es');
 
-        //Gestionar el banner de cookies
+        // Gestionar el banner de cookies
+        console.log("🍪 Buscando banner de cookies...");
         try {
             const xpathCookies = "//button//span[contains(text(), 'Aceptar todo')] | //button[contains(., 'Aceptar todo')] | //span[contains(text(), 'Acepto')]/..";
 
             const acceptCookiesBtn = await driver.wait(
                 until.elementLocated(By.xpath(xpathCookies)),
-                5000 // Aumentamos a 5 segundos
+                5000
             );
 
-            // A veces selenium intenta hacer click antes de que sea interactivo
             await delay(500);
             await acceptCookiesBtn.click();
-            await delay(1000); // Esperar a que desaparezca el modal
+            await delay(1000);
+            console.log("✅ Cookies aceptadas");
         } catch (e) {
-            console.log("ℹ️ No se detectó banner de cookies (o falló el click), intentando continuar...");
+            console.log("ℹ️ No se detectó banner de cookies, continuando...");
         }
 
-        // 3. Preparar la búsqueda
+        // Preparar la búsqueda
         const direccionLimpia = limpiarDireccion(direccion);
         const query = `${direccionLimpia}, ${codigoPostal} ${municipio}, ${provincia}, España`;
 
         console.log(`🔍 Buscando: "${query}"`);
 
-        // 4. Encontrar la caja de búsqueda de Google Maps
-        // Aumentamos el timeout a 15 segundos por si la red va lenta
-        const searchBox = await driver.findElement(By.id('searchboxinput'));
+        // Encontrar la caja de búsqueda de Google Maps
+        console.log("📝 Localizando caja de búsqueda...");
+        const searchBox = await driver.wait(
+            until.elementLocated(By.id('searchboxinput')),
+            SELENIUM_CONFIG.TIMEOUT
+        );
         await searchBox.clear();
         await searchBox.sendKeys(query);
         await searchBox.sendKeys(Key.ENTER);
+        console.log("✅ Búsqueda enviada");
 
-        // 5. Esperar a que la URL cambie y contenga las coordenadas
+        // Esperar a que la URL cambie y contenga las coordenadas
+        console.log("⏳ Esperando coordenadas en la URL...");
         try {
-            await driver.wait(until.urlContains('@'), 10000);
+            await driver.wait(until.urlContains('@'), SELENIUM_CONFIG.TIMEOUT);
         } catch (e) {
-            console.log("⚠️ Tiempo de espera agotado esperando actualización de URL. Intentando leerla de todas formas.");
+            console.log("⚠️ Timeout esperando URL, intentando extraer de todas formas...");
         }
 
-        // Damos tiempo para que la URL se estabilice (animación de vuelo al sitio)
-        await delay(2000);
+        // Damos tiempo para que la URL se estabilice
+        await delay(SELENIUM_CONFIG.COORDS_WAIT);
 
         const currentUrl = await driver.getCurrentUrl();
+        console.log(`📍 URL actual: ${currentUrl.substring(0, 100)}...`);
 
-        // 6. Extraer coordenadas con Regex
+        // Extraer coordenadas con Regex
         const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
         const match = currentUrl.match(regex);
 
@@ -107,19 +133,24 @@ export async function geocodificarConSelenium(
             const lat = parseFloat(match[1]);
             const lon = parseFloat(match[2]);
 
-            console.log(`✅ Coordenadas encontradas: ${lat}, ${lon}`);
+            console.log(`✅ Coordenadas encontradas: ${lat}, ${lon}\n`);
             return { lat, lon };
         } else {
-            console.warn("⚠️ No se pudieron extraer coordenadas de la URL.");
+            console.warn(`⚠️ No se pudieron extraer coordenadas de la URL\n`);
             return null;
         }
 
-    } catch (error) {
-        console.error(`❌ Error crítico en Selenium:`, error);
+    } catch (error: any) {
+        console.error(`❌ Error en geocodificación:`, error.message || error);
         return null;
     } finally {
         if (driver) {
-            await driver.quit();
+            try {
+                await driver.quit();
+                console.log("🔚 Navegador cerrado\n");
+            } catch (e) {
+                console.error("⚠️ Error cerrando navegador:", e);
+            }
         }
     }
 }
