@@ -4,6 +4,7 @@ import { parseStringPromise } from "xml2js";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
+import { broadcastLog } from "../api/sseLogger";
 
 // Función para normalizar coordenadas al rango correcto de España
 function normalizarCoordenada(valor: number, esLatitud: boolean): number {
@@ -45,6 +46,7 @@ export async function loadCATData(dataFolder: string = "data") {
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [CATALUÑA - ${source}] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);
+    broadcastLog(`[CATALUÑA - ${source}] Procesando ${estaciones.length} estaciones`, 'info');
 
     let cargadas = 0;
     let rechazadas = 0;
@@ -65,6 +67,7 @@ export async function loadCATData(dataFolder: string = "data") {
 
         if (!municipi || !provincia) {
             console.warn("⚠️ Punto incompleto en XML, saltando...\n");
+            broadcastLog(`⚠️ Punto incompleto en XML, saltando...`, 'warning');
             rechazadas++;
             continue;
         }
@@ -91,6 +94,7 @@ export async function loadCATData(dataFolder: string = "data") {
         if (!validacion.esValido) {
             rechazadas++;
             console.log(`\n🚫 Estación rechazada por errores críticos\n`);
+            broadcastLog(`🚫 Estación rechazada por errores críticos`, 'warning');
             continue;
         }
 
@@ -99,6 +103,7 @@ export async function loadCATData(dataFolder: string = "data") {
         }
 
         console.log(`\n✅ Estación validada, procediendo al procesamiento e inserción...\n`);
+        broadcastLog(`✅ Estación validada, procediendo al procesamiento e inserción...`, 'info');
 
         // Usar datos corregidos
         const datos = validacion.datosCorregidos;
@@ -142,9 +147,11 @@ export async function loadCATData(dataFolder: string = "data") {
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando CAT:", error.message);
+            broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
             rechazadas++;
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
+            broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');
             cargadas++;
         }
     }
@@ -158,4 +165,10 @@ export async function loadCATData(dataFolder: string = "data") {
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
     console.log(`${"=".repeat(80)}\n`);
+    
+    broadcastLog(`📊 RESUMEN CATALUÑA`, 'info');
+    broadcastLog(`✅ Estaciones cargadas: ${cargadas}`, 'success');
+    broadcastLog(`✏️ Estaciones con correcciones: ${corregidas}`, 'info');
+    broadcastLog(`❌ Estaciones rechazadas: ${rechazadas}`, 'warning');
+    broadcastLog(`📝 Total procesadas: ${estaciones.length}`, 'info');
 }

@@ -5,6 +5,8 @@
  * acentos, capitalización y formatos incorrectos.
  */
 
+import { broadcastLog } from "../api/sseLogger";
+
 // Listas oficiales de provincias españolas
 const PROVINCIAS_VALIDAS = [
     // Comunidad Valenciana
@@ -476,8 +478,11 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
     const esMovil = normalizar(String(tipoEstacion)).includes("movil");
     const esAgricola = normalizar(String(tipoEstacion)).includes("agricola");
 
-    console.log(`\n🔍 Validando estación [${origen}]: ${estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || (esMovil ? "Estación móvil" : "Estación Agrícola")}`);
+    const nombreEstacion = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || (esMovil ? "Estación móvil" : "Estación Agrícola");
+    console.log(`\n🔍 Validando estación [${origen}]: ${nombreEstacion}`);
     console.log("=".repeat(70));
+    broadcastLog(`🔍 Validando estación [${origen}]: ${nombreEstacion}`, 'info');
+    broadcastLog("=".repeat(70), 'info');
 
 
     // 1. PROVINCIA
@@ -488,19 +493,24 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
         if (resultProvincia.error.corregido) {
             advertencias.push(resultProvincia.error);
             console.log(`✏️  ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
+            broadcastLog(`✏️ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`, 'warning');
         } else {
             errores.push(resultProvincia.error);
             console.log(`❌ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`);
+            broadcastLog(`❌ ${resultProvincia.error.campo}: ${resultProvincia.error.mensaje}`, 'error');
         }
     } else {
         console.log(`✅ PROVINCIA: "${resultProvincia.valorCorregido}"`);
+        broadcastLog(`✅ PROVINCIA: "${resultProvincia.valorCorregido}"`, 'success');
     }
     datosCorregidos.PROVINCIA = resultProvincia.valorCorregido;
 
     if (esMovil) {
         console.log("⚠️  Estación móvil, se omite validación de municipio y CP.");
+        broadcastLog("⚠️ Estación móvil, se omite validación de municipio y CP.", 'warning');
     } else if (esAgricola) {
         console.log("⚠️  Estación agrícola, se omite validación de municipio y CP.");
+        broadcastLog("⚠️ Estación agrícola, se omite validación de municipio y CP.", 'warning');
     }
 
     if (!esMovil && !esAgricola) {
@@ -512,12 +522,15 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
             if (resultMunicipio.error.corregido) {
                 advertencias.push(resultMunicipio.error);
                 console.log(`✏️  ${resultMunicipio.error.mensaje}`);
+                broadcastLog(`✏️ ${resultMunicipio.error.mensaje}`, 'warning');
             } else {
                 errores.push(resultMunicipio.error);
                 console.log(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`);
+                broadcastLog(`❌ ${resultMunicipio.error.campo}: ${resultMunicipio.error.mensaje}`, 'error');
             }
         } else if (resultMunicipio.valorCorregido) {
             console.log(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`);
+            broadcastLog(`✅ MUNICIPIO: "${resultMunicipio.valorCorregido}"`, 'success');
         }
         datosCorregidos.MUNICIPIO = resultMunicipio.valorCorregido || datosCorregidos.PROVINCIA;
 
@@ -537,6 +550,7 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
                     corregido: true
                 });
                 console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
+                broadcastLog(`✏️ PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`, 'warning');
                 provinciaFinal = provinciaCorrecta;
                 datosCorregidos.PROVINCIA = provinciaCorrecta;
             }
@@ -550,12 +564,15 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
             if (resultCP.error.corregido) {
                 advertencias.push(resultCP.error);
                 console.log(`✏️  ${resultCP.error.mensaje}`);
+                broadcastLog(`✏️ ${resultCP.error.mensaje}`, 'warning');
             } else {
                 errores.push(resultCP.error);
                 console.log(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`);
+                broadcastLog(`❌ ${resultCP.error.campo}: ${resultCP.error.mensaje}`, 'error');
             }
         } else {
             console.log(`✅ C.POSTAL: ${resultCP.valorCorregido}`);
+            broadcastLog(`✅ C.POSTAL: ${resultCP.valorCorregido}`, 'success');
         }
         datosCorregidos["C.POSTAL"] = resultCP.valorCorregido;
     }
@@ -581,6 +598,7 @@ export function validarYCorregirEstacion(estacion: any, origen: string): Resulta
     if (!resultadoBase.esValido) {
         console.log("\n" + "=".repeat(70));
         console.log(`❌ ESTACIÓN RECHAZADA: ${resultadoBase.errores.length} error/errores críticos`);
+        broadcastLog(`❌ ESTACIÓN RECHAZADA: ${resultadoBase.errores.length} error/errores críticos`, 'error');
         return resultadoBase;
     }
 
@@ -594,13 +612,17 @@ export function validarYCorregirEstacion(estacion: any, origen: string): Resulta
         erroresCoordenadas.forEach(err => {
             resultadoBase.errores.push(err);
             console.log(`❌ ${err.campo}: ${err.mensaje}`);
+            broadcastLog(`❌ ${err.campo}: ${err.mensaje}`, 'error');
         });
         console.log("\n" + "=".repeat(70));
         console.log(`❌ ESTACIÓN RECHAZADA: ${erroresCoordenadas.length} error/errores de coordenadas`);
+        broadcastLog(`❌ ESTACIÓN RECHAZADA: ${erroresCoordenadas.length} error/errores de coordenadas`, 'error');
     } else if (lat !== 0 && lon !== 0) {
         console.log(`\n✅ COORDENADAS VÁLIDAS: ${lat}, ${lon}`);
         console.log("\n" + "=".repeat(70));
         console.log(`✅ ESTACIÓN VÁLIDA (${resultadoBase.advertencias.length} corrección/correcciones aplicadas)`);
+        broadcastLog(`✅ COORDENADAS VÁLIDAS: ${lat}, ${lon}`, 'success');
+        broadcastLog(`✅ ESTACIÓN VÁLIDA (${resultadoBase.advertencias.length} corrección/correcciones aplicadas)`, 'success');
     }
 
     const esValido = resultadoBase.errores.length === 0;

@@ -4,6 +4,7 @@ import csv from "csv-parser";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
+import { broadcastLog } from "../api/sseLogger";
 
 export async function loadGALData(dataFolder: string = "data") {
     const filePath = path.join(__dirname, `../../${dataFolder}/Estacions_ITV.csv`);
@@ -18,6 +19,7 @@ export async function loadGALData(dataFolder: string = "data") {
                 console.log(`\n${"=".repeat(80)}`);
                 console.log(`🔄 [GALICIA - ${source}] Procesando ${results.length} estaciones`);
                 console.log(`${"=".repeat(80)}\n`);
+                broadcastLog(`[GALICIA - ${source}] Procesando ${results.length} estaciones`, 'info');
 
                 let cargadas = 0;
                 let rechazadas = 0;
@@ -38,6 +40,7 @@ export async function loadGALData(dataFolder: string = "data") {
 
                     if (!nombreOriginal || !concello || !provincia) {
                         console.warn("⚠️ Fila incompleta (falta nombre, concello o provincia), saltando...\n");
+                        broadcastLog(`⚠️ Fila incompleta, saltando...`, 'warning');
                         rechazadas++;
                         continue;
                     }
@@ -63,6 +66,7 @@ export async function loadGALData(dataFolder: string = "data") {
                     if (!validacion.esValido) {
                         rechazadas++;
                         console.log(`\n🚫 Estación rechazada por errores críticos\n`);
+                        broadcastLog(`🚫 Estación rechazada por errores críticos`, 'warning');
                         continue;
                     }
 
@@ -71,6 +75,7 @@ export async function loadGALData(dataFolder: string = "data") {
                     }
 
                     console.log(`\n✅ Estación validada, procediendo al procesamiento e inserción...\n`);
+                    broadcastLog(`✅ Estación validada, procediendo al procesamiento e inserción...`, 'info');
 
                     // Usar datos corregidos
                     const datos = validacion.datosCorregidos;
@@ -110,9 +115,11 @@ export async function loadGALData(dataFolder: string = "data") {
                     const { error } = await supabase.from("estacion").insert(estacionData);
                     if (error) {
                         console.error("❌ Error insertando GAL:", error.message);
+                        broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
                         rechazadas++;
                     } else {
                         console.log(`✅ Estación insertada correctamente en la base de datos\n`);
+                        broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${results.length})`, 'success');
                         cargadas++;
                     }
                 }
@@ -125,6 +132,12 @@ export async function loadGALData(dataFolder: string = "data") {
                 console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
                 console.log(`📝 Total procesadas: ${results.length}`);
                 console.log(`${"=".repeat(80)}\n`);
+                
+                broadcastLog(`📊 RESUMEN GALICIA`, 'info');
+                broadcastLog(`✅ Estaciones cargadas: ${cargadas}`, 'success');
+                broadcastLog(`✏️ Estaciones con correcciones: ${corregidas}`, 'info');
+                broadcastLog(`❌ Estaciones rechazadas: ${rechazadas}`, 'warning');
+                broadcastLog(`📝 Total procesadas: ${results.length}`, 'info');
 
                 resolve();
             })
