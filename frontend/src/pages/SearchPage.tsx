@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Search, MapPin, Mail, Building2, Tag, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { getAllEstaciones } from '../services'
 import type { EstacionConRelaciones, LoadingState } from '@shared'
+
+// Fix para los iconos de Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+})
 
 export default function SearchPage() {
   // Estado del formulario
@@ -18,10 +28,128 @@ export default function SearchPage() {
   const [loadingState, setLoadingState] = useState<LoadingState>('idle')
   const [error, setError] = useState<string | null>(null)
 
+  // Referencias para el mapa
+  const mapRef = useRef<L.Map | null>(null)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const markersLayerRef = useRef<L.LayerGroup | null>(null)
+
   // Cargar todas las estaciones al montar el componente
   useEffect(() => {
     cargarEstaciones()
   }, [])
+
+  // Inicializar el mapa
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return
+
+    // Crear el mapa centrado en España
+    const map = L.map(mapContainerRef.current).setView([40.4168, -3.7038], 6)
+
+    // Añadir capa de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map)
+
+    // Crear capa para los marcadores
+    const markersLayer = L.layerGroup().addTo(map)
+    markersLayerRef.current = markersLayer
+
+    mapRef.current = map
+
+    // Cleanup al desmontar
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+      }
+    }
+  }, [])
+
+  // Actualizar marcadores cuando cambian las estaciones filtradas
+  useEffect(() => {
+    if (!mapRef.current || !markersLayerRef.current) return
+
+    // Limpiar marcadores existentes
+    markersLayerRef.current.clearLayers()
+
+    // Si no hay estaciones, volver a la vista de España
+    if (estacionesFiltradas.length === 0) {
+      mapRef.current.setView([40.4168, -3.7038], 6)
+      return
+    }
+
+    // Crear iconos personalizados según el tipo
+    const iconoFija = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    })
+
+    const iconoMovil = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    })
+
+    const bounds: L.LatLngBoundsExpression = []
+
+    // Añadir marcadores para cada estación
+    estacionesFiltradas.forEach((estacion) => {
+      // Coordenadas de ejemplo - deberías tener las coordenadas reales en tu base de datos
+      // Aquí usamos coordenadas aleatorias cercanas a las capitales de provincia
+      const coordenadas = obtenerCoordenadasEstacion(estacion)
+      
+      if (coordenadas) {
+        const marker = L.marker(coordenadas, {
+          icon: estacion.tipo === 'Estacion Fija' ? iconoFija : iconoMovil
+        })
+
+        // Crear popup con información de la estación
+        const popupContent = `
+          <div class="popup-estacion">
+            <h4 class="font-bold text-base mb-2">${estacion.nombre}</h4>
+            <div class="text-sm space-y-1">
+              <p><strong>Tipo:</strong> ${estacion.tipo === 'Estacion Fija' ? 'Fija' : 'Móvil'}</p>
+              <p><strong>Dirección:</strong> ${estacion.direccion}</p>
+              <p><strong>CP:</strong> ${estacion.codigo_postal}</p>
+              <p><strong>Localidad:</strong> ${estacion.localidad.nombre}</p>
+              <p><strong>Provincia:</strong> ${estacion.localidad.provincia.nombre}</p>
+              ${estacion.horario ? `<p><strong>Horario:</strong> ${estacion.horario}</p>` : ''}
+              ${estacion.contacto ? `<p><strong>Contacto:</strong> ${estacion.contacto}</p>` : ''}
+            </div>
+          </div>
+        `
+
+        marker.bindPopup(popupContent)
+        marker.addTo(markersLayerRef.current!)
+
+        bounds.push(coordenadas)
+      }
+    })
+
+    // Ajustar el mapa para mostrar todos los marcadores
+    if (bounds.length > 0) {
+      mapRef.current.fitBounds(bounds, { padding: [50, 50] })
+    }
+  }, [estacionesFiltradas])
+
+  // Función auxiliar para obtener coordenadas reales de la estación desde la base de datos
+  const obtenerCoordenadasEstacion = (estacion: EstacionConRelaciones): [number, number] | null => {
+    // Usar las coordenadas reales de la estación desde la base de datos
+    if (estacion.latitud && estacion.longitud) {
+      return [estacion.latitud, estacion.longitud]
+    }
+
+    // Fallback: si las coordenadas no existen, retornar null
+    return null
+  }
 
   const cargarEstaciones = async () => {
     setLoadingState('loading')
@@ -179,12 +307,12 @@ export default function SearchPage() {
                 </div>
               </div>
 
-              <div className="search-preview bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl p-8 flex items-center justify-center border-2 border-gray-300 border-dashed">
-                <div className="map-placeholder text-center">
-                  <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500 font-medium">Vista previa del mapa</p>
-                  <p className="text-sm text-gray-400 mt-1">Los resultados se mostrarán aquí</p>
-                </div>
+              <div className="search-preview bg-white rounded-xl overflow-hidden border-2 border-gray-300 shadow-lg">
+                <div 
+                  ref={mapContainerRef} 
+                  className="w-full h-full min-h-[400px]"
+                  style={{ minHeight: '400px' }}
+                />
               </div>
             </div>
 
@@ -256,6 +384,15 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        .popup-estacion {
+          min-width: 200px;
+        }
+        .leaflet-popup-content {
+          margin: 8px 12px;
+        }
+      `}</style>
     </div>
   )
 }
