@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { supabase } from "../db/supabaseClient";
-import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
+import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../utils/dbHelpers";
 import { validarYCorregirEstacion, validarYCorregirEstacionSinCoordenadas } from "../utils/validator";
 import { validarCoordenadas } from "../utils/validator";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
@@ -34,6 +34,9 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
+    
+    // Set para rastrear estaciones ya procesadas en esta ejecución (nombre + localidad)
+    const estacionesProcesadas = new Set<string>();
 
     for (const est of estaciones) {
         // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS (sin coordenadas aún)
@@ -71,6 +74,34 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
         else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "Estacion Movil";
         else tipoEstacion = "Otros";
+        
+        // Normalizar nombre para comparación
+        const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        let claveEstacion: string;
+        
+        // Para estaciones fijas: usar municipio_provincia
+        // Para móviles/agrícolas: usar tipo_provincia (permite 1 de cada tipo por provincia)
+        if (tipoEstacion === "Estacion Fija") {
+            claveEstacion = `${normalizar(municipio)}_${normalizar(datos.PROVINCIA)}`;
+        } else if (tipoEstacion === "Estacion Movil") {
+            claveEstacion = `movil_${normalizar(datos.PROVINCIA)}`;
+        } else {
+            claveEstacion = `agricola_${normalizar(datos.PROVINCIA)}`;
+        }
+        
+        // Verificar si ya se procesó en esta ejecución
+        if (estacionesProcesadas.has(claveEstacion)) {
+            const tipoTexto = tipoEstacion === "Estacion Fija" ? "en " + municipio : 
+                            tipoEstacion === "Estacion Movil" ? "Móvil de " + datos.PROVINCIA :
+                            "Agrícola de " + datos.PROVINCIA;
+            console.log(`⚠️ Estación ${tipoTexto} duplicada en el archivo, omitiendo\n`);
+            broadcastLog(`⚠️ Estación ${tipoTexto} duplicada en archivo, omitida`, 'warning');
+            rechazadas++;
+            continue;
+        }
+        
+        // Marcar como procesada
+        estacionesProcesadas.add(claveEstacion);
 
         let url = "https://sitval.com/centros/";
         if (tipoEstacion === "Estacion Movil") {
@@ -106,11 +137,19 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
 
         await delay(500);
 
+        // Validación final: asegurar que localidadId es válido
+        if (!localidadId) {
+            console.error("❌ localidadId es null o undefined, saltando estación\n");
+            broadcastLog("❌ Error: localidadId inválido", 'error');
+            rechazadas++;
+            continue;
+        }
+
         const estacionData = {
             nombre: nombre,
             tipo: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
-            codigo_postal: codigoPostal,
+            codigo_postal: (tipoEstacion === "Estacion Fija") ? codigoPostal : null,
             latitud: coordenadas?.lat || 0,
             longitud: coordenadas?.lon || 0,
             descripcion: descripcion,
@@ -144,11 +183,28 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
             corregidas++;
         }
 
+        // Verificar si ya existe la estación antes de intentar insertar
+        const yaExiste = await existeEstacion(nombre, localidadId);
+        if (yaExiste) {
+            console.log(`⚠️ Estación "${nombre}" ya existe en la base de datos, omitiendo inserción\n`);
+            broadcastLog(`⚠️ Estación "${nombre}" ya existe, omitida`, 'warning');
+            rechazadas++;
+            continue;
+        }
+
+        // Intentar insertar - Si falla por duplicado, manejar el error
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
-            console.error("❌ Error insertando estación CV:", error.message);
-            broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
-            rechazadas++;
+            // Si es un error de duplicado, solo advertir y continuar
+            if (error.message.includes('duplicate') || error.code === '23505') {
+                console.log(`⚠️ Estación "${nombre}" duplicada detectada durante inserción, omitiendo\n`);
+                broadcastLog(`⚠️ Estación "${nombre}" duplicada, omitida`, 'warning');
+                rechazadas++;
+            } else {
+                console.error("❌ Error insertando estación CV:", error.message);
+                broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
+                rechazadas++;
+            }
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
             broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');

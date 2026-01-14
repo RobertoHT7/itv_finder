@@ -8,11 +8,23 @@ interface GeocodeResult {
 }
 
 /**
- * Limpia y simplifica una dirección para mejorar la geocodificación
- * Elimina números de parcela, polígonos industriales específicos, etc.
- * (MÉTODO ORIGINAL CONSERVADO)
+ * Limpia levemente una dirección manteniendo la mayor información posible
  */
-function limpiarDireccion(direccion: string): string {
+function limpiarDireccionLeve(direccion: string): string {
+    let limpia = direccion;
+
+    // Solo eliminar comas múltiples y espacios extras
+    limpia = limpia.replace(/,\s*,/g, ',');
+    limpia = limpia.replace(/\s+/g, ' ');
+    limpia = limpia.trim();
+
+    return limpia;
+}
+
+/**
+ * Limpia más agresivamente una dirección (fallback si la búsqueda exacta falla)
+ */
+function limpiarDireccionAgresiva(direccion: string): string {
     let limpia = direccion;
 
     // Eliminar "s/n" y "s/nº"
@@ -21,11 +33,8 @@ function limpiarDireccion(direccion: string): string {
     // Eliminar números de parcela: "Parcela 88", "Parcelas 88 y 89"
     limpia = limpia.replace(/parcelas?\s*\d+(\s*y\s*\d+)?/gi, '');
 
-    // Eliminar "Pol. Ind." y el nombre específico del polígono
-    limpia = limpia.replace(/pol\.?\s*ind\.?\s*[^,]*/gi, 'Polígono Industrial');
-
-    // Eliminar kilómetros: "Km 55", "Km. 55"
-    limpia = limpia.replace(/km\.?\s*\d+/gi, '');
+    // Simplificar "Pol. Ind." pero mantener el nombre
+    limpia = limpia.replace(/pol\.?\s*ind\.?\s+/gi, 'Polígono Industrial ');
 
     // Eliminar comas múltiples y espacios extras
     limpia = limpia.replace(/,\s*,/g, ',');
@@ -94,20 +103,55 @@ export async function geocodificarConSelenium(
             console.log("ℹ️ No se detectó banner de cookies, continuando...");
         }
 
-        // Preparar la búsqueda
-        const direccionLimpia = limpiarDireccion(direccion);
-        const query = `${direccionLimpia}, ${codigoPostal} ${municipio}, ${provincia}, España`;
+        // Preparar la búsqueda - intentar primero con la dirección original completa
+        const direccionOriginal = limpiarDireccionLeve(direccion);
+        const query = `${direccionOriginal}, ${codigoPostal} ${municipio}, ${provincia}, España`;
 
-        console.log(`🔍 Buscando: "${query}"`);
+        console.log(`🔍 Buscando (intento 1/2): "${query}"`);
 
         // Encontrar la caja de búsqueda de Google Maps
         console.log("📝 Localizando caja de búsqueda...");
-        const searchBox = await driver.wait(
-            until.elementLocated(By.id('searchboxinput')),
-            SELENIUM_CONFIG.TIMEOUT
-        );
+        
+        // Intentar múltiples selectores (Google Maps cambia con frecuencia)
+        let searchBox;
+        try {
+            // Selector 1: ID original
+            searchBox = await driver.wait(
+                until.elementLocated(By.id('searchboxinput')),
+                3000
+            );
+        } catch (e1) {
+            try {
+                // Selector 2: Input con aria-label
+                console.log("ℹ️ Intentando selector alternativo (aria-label)...");
+                searchBox = await driver.wait(
+                    until.elementLocated(By.css('input[aria-label*="Buscar"]')),
+                    3000
+                );
+            } catch (e2) {
+                try {
+                    // Selector 3: Input en el searchbox
+                    console.log("ℹ️ Intentando selector alternativo (searchbox)...");
+                    searchBox = await driver.wait(
+                        until.elementLocated(By.css('input[name="q"]')),
+                        3000
+                    );
+                } catch (e3) {
+                    // Selector 4: Cualquier input visible en la barra de búsqueda
+                    console.log("ℹ️ Intentando selector alternativo (genérico)...");
+                    searchBox = await driver.wait(
+                        until.elementLocated(By.css('input[type="search"], input.searchboxinput')),
+                        3000
+                    );
+                }
+            }
+        }
+        
+        await delay(500);
         await searchBox.clear();
+        await delay(300);
         await searchBox.sendKeys(query);
+        await delay(500);
         await searchBox.sendKeys(Key.ENTER);
         console.log("✅ Búsqueda enviada");
 
@@ -122,8 +166,38 @@ export async function geocodificarConSelenium(
         // Damos tiempo para que la URL se estabilice
         await delay(SELENIUM_CONFIG.COORDS_WAIT);
 
-        const currentUrl = await driver.getCurrentUrl();
+        let currentUrl = await driver.getCurrentUrl();
         console.log(`📍 URL actual: ${currentUrl.substring(0, 100)}...`);
+
+        // Verificar si Google Maps encontró resultados relevantes
+        const urlLower = currentUrl.toLowerCase();
+        const municipioLower = municipio.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const provinciaLower = provincia.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        // Si la URL no contiene el municipio ni la provincia, probablemente no encontró la dirección correcta
+        const contieneUbicacion = urlLower.includes(municipioLower) || urlLower.includes(provinciaLower);
+        
+        // Si no hay coordenadas o la ubicación parece incorrecta, intentar con dirección simplificada
+        if (!currentUrl.includes('@') || !contieneUbicacion) {
+            console.log("⚠️ La búsqueda inicial no dio resultados precisos");
+            console.log("🔄 Reintentando con dirección simplificada...");
+            
+            const direccionSimplificada = limpiarDireccionAgresiva(direccion);
+            const querySimplificado = `${direccionSimplificada}, ${codigoPostal} ${municipio}, ${provincia}, España`;
+            console.log(`🔍 Buscando (intento 2/2): "${querySimplificado}"`);
+            
+            // Limpiar y buscar de nuevo
+            const searchBox2 = await driver.findElement(By.css('input[name="q"], input[aria-label*="Buscar"], #searchboxinput'));
+            await searchBox2.clear();
+            await delay(300);
+            await searchBox2.sendKeys(querySimplificado);
+            await delay(500);
+            await searchBox2.sendKeys(Key.ENTER);
+            
+            await delay(SELENIUM_CONFIG.COORDS_WAIT);
+            currentUrl = await driver.getCurrentUrl();
+            console.log(`📍 Nueva URL: ${currentUrl.substring(0, 100)}...`);
+        }
 
         // Extraer coordenadas con Regex
         const regex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;

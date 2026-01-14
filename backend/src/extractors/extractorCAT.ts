@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { parseStringPromise } from "xml2js";
 import { supabase } from "../db/supabaseClient";
-import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
+import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
 import { broadcastLog } from "../api/sseLogger";
 
@@ -53,6 +53,9 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
+    
+    // Set para rastrear estaciones ya procesadas en esta ejecución
+    const estacionesProcesadas = new Set<string>();
 
     for (const est of estaciones) {
         const denominacio = est.denominaci?.[0];
@@ -123,6 +126,21 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         }
 
         const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
+        
+        // Normalizar nombre para comparación (solo estaciones fijas en Cataluña)
+        const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const claveEstacion = `${normalizar(datos.MUNICIPIO)}_${normalizar(datos.PROVINCIA)}`;
+        
+        // Verificar si ya se procesó en esta ejecución
+        if (estacionesProcesadas.has(claveEstacion)) {
+            console.log(`⚠️ Estación en "${datos.MUNICIPIO}" duplicada en el archivo, omitiendo\n`);
+            broadcastLog(`⚠️ Estación en "${datos.MUNICIPIO}" duplicada en archivo, omitida`, 'warning');
+            rechazadas++;
+            continue;
+        }
+        
+        // Marcar como procesada
+        estacionesProcesadas.add(claveEstacion);
 
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
         const nombre = `ITV de ${municipi}`;
@@ -130,6 +148,14 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         let contacto = est.correu_electr_nic?.[0] || "Sin contacto";
         if (contacto.startsWith("https") || contacto.startsWith("http")) {
             contacto = "https://www.applusiteuve.com/es-es/contacto-itv-responde/itv-responde/";
+        }
+
+        // Validación final: asegurar que localidadId es válido
+        if (!localidadId) {
+            console.error("❌ localidadId es null o undefined, saltando estación\n");
+            broadcastLog("❌ Error: localidadId inválido", 'error');
+            rechazadas++;
+            continue;
         }
 
         const estacionData = {
@@ -146,11 +172,27 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
             localidadId,
         };
 
+        // Verificar si ya existe la estación
+        const yaExiste = await existeEstacion(nombre, localidadId);
+        if (yaExiste) {
+            console.log(`⚠️ Estación "${nombre}" ya existe en la base de datos, omitiendo inserción\n`);
+            broadcastLog(`⚠️ Estación "${nombre}" ya existe, omitida`, 'warning');
+            rechazadas++;
+            continue;
+        }
+
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
-            console.error("❌ Error insertando CAT:", error.message);
-            broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
-            rechazadas++;
+            // Si es un error de duplicado, solo advertir y continuar
+            if (error.message.includes('duplicate') || error.code === '23505') {
+                console.log(`⚠️ Estación "${nombre}" duplicada detectada durante inserción, omitiendo\n`);
+                broadcastLog(`⚠️ Estación "${nombre}" duplicada, omitida`, 'warning');
+                rechazadas++;
+            } else {
+                console.error("❌ Error insertando CAT:", error.message);
+                broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
+                rechazadas++;
+            }
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
             broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');

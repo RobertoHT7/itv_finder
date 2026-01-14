@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 import { supabase } from "../db/supabaseClient";
-import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
+import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
 import { broadcastLog } from "../api/sseLogger";
 
@@ -26,6 +26,9 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
                 let cargadas = 0;
                 let rechazadas = 0;
                 let corregidas = 0;
+                
+                // Set para rastrear estaciones ya procesadas en esta ejecución
+                const estacionesProcesadas = new Set<string>();
 
                 for (const est of results) {
                     // Mapeo de claves con posibles caracteres extraños por encoding
@@ -99,12 +102,45 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
 
                     let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
                     if (nombreOriginal.toLowerCase().includes("móvil")) tipoEstacion = "Estacion Movil";
+                    
+                    // Normalizar nombre para comparación
+                    const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    let claveEstacion: string;
+                    
+                    // Para estaciones fijas: usar municipio_provincia
+                    // Para móviles: usar tipo_provincia
+                    if (tipoEstacion === "Estacion Fija") {
+                        claveEstacion = `${normalizar(datos.MUNICIPIO || concello)}_${normalizar(datos.PROVINCIA)}`;
+                    } else {
+                        claveEstacion = `movil_${normalizar(datos.PROVINCIA)}`;
+                    }
+                    
+                    // Verificar si ya se procesó en esta ejecución
+                    if (estacionesProcesadas.has(claveEstacion)) {
+                        const tipoTexto = tipoEstacion === "Estacion Fija" ? "en " + (datos.MUNICIPIO || concello) : 
+                                        "Móvil de " + datos.PROVINCIA;
+                        console.log(`⚠️ Estación ${tipoTexto} duplicada en el archivo, omitiendo\n`);
+                        broadcastLog(`⚠️ Estación ${tipoTexto} duplicada en archivo, omitida`, 'warning');
+                        rechazadas++;
+                        continue;
+                    }
+                    
+                    // Marcar como procesada
+                    estacionesProcesadas.add(claveEstacion);
+
+                    // Validación final: asegurar que localidadId es válido
+                    if (!localidadId) {
+                        console.error("❌ localidadId es null o undefined, saltando estación\n");
+                        broadcastLog("❌ Error: localidadId inválido", 'error');
+                        rechazadas++;
+                        continue;
+                    }
 
                     const estacionData = {
                         nombre: nombre,
                         tipo: tipoEstacion,
                         direccion: direccion || "Sin dirección",
-                        codigo_postal: datos["C.POSTAL"],
+                        codigo_postal: (tipoEstacion === "Estacion Fija") ? datos["C.POSTAL"] : null,
                         latitud: lat,
                         longitud: lon,
                         descripcion: `Estación ITV de ${concello}`,
@@ -114,11 +150,27 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
                         localidadId,
                     };
 
+                    // Verificar si ya existe la estación
+                    const yaExiste = await existeEstacion(nombre, localidadId);
+                    if (yaExiste) {
+                        console.log(`⚠️ Estación "${nombre}" ya existe en la base de datos, omitiendo inserción\n`);
+                        broadcastLog(`⚠️ Estación "${nombre}" ya existe, omitida`, 'warning');
+                        rechazadas++;
+                        continue;
+                    }
+
                     const { error } = await supabase.from("estacion").insert(estacionData);
                     if (error) {
-                        console.error("❌ Error insertando GAL:", error.message);
-                        broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
-                        rechazadas++;
+                        // Si es un error de duplicado, solo advertir y continuar
+                        if (error.message.includes('duplicate') || error.code === '23505') {
+                            console.log(`⚠️ Estación "${nombre}" duplicada detectada durante inserción, omitiendo\n`);
+                            broadcastLog(`⚠️ Estación "${nombre}" duplicada, omitida`, 'warning');
+                            rechazadas++;
+                        } else {
+                            console.error("❌ Error insertando GAL:", error.message);
+                            broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
+                            rechazadas++;
+                        }
                     } else {
                         console.log(`✅ Estación insertada correctamente en la base de datos\n`);
                         broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${results.length})`, 'success');

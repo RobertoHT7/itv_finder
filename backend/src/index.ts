@@ -21,7 +21,7 @@ import { getWrapperGAL } from "./wrappers/wrapperGAL";
 import { getWrapperCAT } from "./wrappers/wrapperCAT";
 
 // Utilidades
-import { limpiarBaseDeDatos } from "./api/limpiar";
+import { limpiarBaseDeDatos, eliminarDuplicados } from "./api/limpiar";
 import { obtenerEstadisticas } from "./api/estadisticas";
 
 dotenv.config();
@@ -38,7 +38,7 @@ app.get("/", (req: Request, res: Response) => res.json({
         carga: "POST /api/carga/*",
         logs: "GET /api/carga/logs (SSE)",
         wrappers: "GET /api/wrapper/*",
-        admin: "DELETE /api/limpiar, GET /api/estadisticas"
+        admin: "DELETE /api/limpiar, DELETE /api/duplicados, GET /api/estadisticas"
     }
 }));
 
@@ -69,6 +69,22 @@ app.delete("/api/limpiar", async (req: Request, res: Response) => {
         }
     } catch (error) {
         res.status(500).json({ error: "Error al limpiar base de datos" });
+    }
+});
+
+app.delete("/api/duplicados", async (req: Request, res: Response) => {
+    try {
+        const result = await eliminarDuplicados();
+        if (result.success) {
+            res.status(200).json({ 
+                message: "Duplicados eliminados correctamente",
+                duplicadosEliminados: result.duplicadosEliminados
+            });
+        } else {
+            res.status(500).json({ error: "Error al eliminar duplicados" });
+        }
+    } catch (error) {
+        res.status(500).json({ error: "Error al eliminar duplicados" });
     }
 });
 
