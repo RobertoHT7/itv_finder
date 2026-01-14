@@ -1,0 +1,122 @@
+[
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Valencia",
+    "MUNICIPIO": "Utiel",
+    "C.POSTAL": 46300,
+    "DIRECCIÓN": "Pol. Ind. El Melero. Avda. de La Industria, Parcelas88y 89",
+    "Nº ESTACIÓN": 4605,
+    "HORARIOS": "L.V. 7:00-21:00",
+    "CORREO": "itv@"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Móvil",
+    "PROVINCIA": "Castellón",
+    "MUNICIPIO": "",
+    "C.POSTAL": "999999",
+    "DIRECCIÓN": "I.T.V. Móvil 01",
+    "Nº ESTACIÓN": 1251,
+    "HORARIOS": "variable según población",
+    "CORREO": "itv1251@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Valencia",
+    "MUNICIPIO": "Alzira",
+    "C.POSTAL": 46600,
+    "DIRECCIÓN": "Ctra. Algemesí, s/n",
+    "Nº ESTACIÓN": 4606,
+    "HORARIOS": "L.V. 7:00-22:00 / S. 8:00-14:00",
+    "CORREO": "itv4606@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Agrícola",
+    "PROVINCIA": "Alicante",
+    "MUNICIPIO": "",
+    "C.POSTAL": "",
+    "DIRECCIÓN": "I.T.V. Agrícola   05",
+    "Nº ESTACIÓN": "0354",
+    "HORARIOS": "variable según población",
+    "CORREO": "itv0354@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Alicante",
+    "MUNICIPIO": "Orihuela",
+    "C.POSTAL": "03314",
+    "DIRECCIÓN": "Ctra. Orihuela - Almoradí, Km. 8,3",
+    "Nº ESTACIÓN": "0303",
+    "HORARIOS": "L.V. 8:00-22:00 / S. 8:00-13:00",
+    "CORREO": "itv0303@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Alicante",
+    "MUNICIPIO": "Redován",
+    "C.POSTAL": "03370",
+    "DIRECCIÓN": "Ctra. N-340 Km 690",
+    "Nº ESTACIÓN": "0302",
+    "HORARIOS": "L.V. 8:00-22:00 / S. 8:00-13:00",
+    "CORREO": "itv0302@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Alicante",
+    "MUNICIPIO": "Villena",
+    "C.POSTAL": "03639",
+    "DIRECCIÓN": "Autovía A-31 km. 191,5 (Colonia Sta. Eulalia)",
+    "Nº ESTACIÓN": "0308",
+    "HORARIOS": "L.V. 8:00-22:00 / S. 8:00-14:00",
+    "CORREO": "itv0308@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Valencia",
+    "MUNICIPIO": "Catarroja",
+    "C.POSTAL": 46470,
+    "DIRECCIÓN": "Pol. Ind. El Bony, Calle 43, s/n",
+    "Nº ESTACIÓN": 4607,
+    "HORARIOS": "L.V. 7:00-22:00",
+    "CORREO": "itv4607@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Agrícola",
+    "PROVINCIA": "Castellón",
+    "MUNICIPIO": "",
+    "C.POSTAL": "",
+    "DIRECCIÓN": "I.T.V. Agrícola 01",
+    "Nº ESTACIÓN": 1252,
+    "HORARIOS": "variable según población",
+    "CORREO": "itv1252@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Móvil",
+    "PROVINCIA": "Alicante",
+    "MUNICIPIO": "Calpe",
+    "C.POSTAL": "03710",
+    "DIRECCIÓN": "I.T.V. Móvil Carpa Calpe Depòsit Municipal de Vehicles",
+    "Nº ESTACIÓN": "0351",
+    "HORARIOS": "L.V 7:30-14:45",
+    "CORREO": "itv0351@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Agrícola",
+    "PROVINCIA": "Valencia",
+    "MUNICIPIO": "",
+    "C.POSTAL": "",
+    "DIRECCIÓN": "I.T.V. Agrícola 02",
+    "Nº ESTACIÓN": 4654,
+    "HORARIOS": "variable según población",
+    "CORREO": "itv4654@sitval.com"
+  },
+  {
+    "TIPO ESTACIÓN": "Estación Fija",
+    "PROVINCIA": "Valencia",
+    "MUNICIPIO": "utiel  ",
+    "C.POSTAL": 46300,
+    "DIRECCIÓN": "Pol. Ind. El Melero. Avda. de La Industria, Parcelas88y 89",
+    "Nº ESTACIÓN": 4605,
+    "HORARIOS": "L.V. 25:99-30:99",
+    "CORREO": "itv4605@sitval.com"
+  }
+]

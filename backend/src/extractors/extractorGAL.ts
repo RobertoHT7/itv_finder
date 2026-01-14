@@ -5,7 +5,7 @@ import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
 
-export async function loadGALData(dataFolder: string = "data") {
+export async function loadGALData(dataFolder: string = "data/entrega2") {
     const filePath = path.join(__dirname, `../../${dataFolder}/Estacions_ITV.csv`);
     const results: any[] = [];
 
@@ -14,7 +14,9 @@ export async function loadGALData(dataFolder: string = "data") {
             .pipe(csv({ separator: ";" }))
             .on("data", (row) => results.push(row))
             .on("end", async () => {
-                const source = dataFolder === "data_prueba" ? "PRUEBA" : "PRODUCCIÓN";
+                const source = dataFolder.includes("entrega1") ? "ENTREGA 1" :
+                    dataFolder.includes("entrega2") ? "ENTREGA 2" :
+                        dataFolder.includes("completo") ? "COMPLETO" : "PRODUCCIÓN";
                 console.log(`\n${"=".repeat(80)}`);
                 console.log(`🔄 [GALICIA - ${source}] Procesando ${results.length} estaciones`);
                 console.log(`${"=".repeat(80)}\n`);

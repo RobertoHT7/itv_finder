@@ -17,12 +17,14 @@ interface EstacionCV {
     CORREO: string;
 }
 
-export async function loadCVData(dataFolder: string = "data") {
+export async function loadCVData(dataFolder: string = "data/entrega2") {
     const filePath = path.join(__dirname, `../../${dataFolder}/estaciones.json`);
     const rawData = fs.readFileSync(filePath, "utf-8");
     const estaciones: EstacionCV[] = JSON.parse(rawData);
 
-    const source = dataFolder === "data_prueba" ? "PRUEBA" : "PRODUCCIÓN";
+    const source = dataFolder.includes("entrega1") ? "ENTREGA 1" :
+        dataFolder.includes("entrega2") ? "ENTREGA 2" :
+            dataFolder.includes("completo") ? "COMPLETO" : "PRODUCCIÓN";
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);

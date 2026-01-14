@@ -8,16 +8,16 @@ import { addSSEClient, broadcastLog } from "./sseLogger";
 /**
  * POST /api/carga/all
  * Carga todos los datos de las estaciones ITV desde todas las comunidades
- * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
- * Nota: data_prueba tiene encoding correcto UTF-8, data/ tiene problemas de encoding
+ * Query params opcionales: source=data/entrega1|data/entrega2|data/completo (por defecto: data/entrega2)
  */
 export const cargarTodosLosDatos = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data_prueba";
+        const source = (req.query.source as string) || "data/entrega2";
 
-        if (source !== "data" && source !== "data_prueba") {
+        const validSources = ["data/entrega1", "data/entrega2", "data/completo"];
+        if (!validSources.includes(source)) {
             return res.status(400).json({
-                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data/entrega1', 'data/entrega2' o 'data/completo'"
             });
         }
 
@@ -58,15 +58,16 @@ export const cargarTodosLosDatos = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/cv
  * Carga datos de la Comunidad Valenciana
- * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
+ * Query params opcionales: source=data/entrega1|data/entrega2|data/completo (por defecto: data/entrega2)
  */
 export const cargarCVData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data_prueba";
+        const source = (req.query.source as string) || "data/entrega2";
 
-        if (source !== "data" && source !== "data_prueba") {
+        const validSources = ["data/entrega1", "data/entrega2", "data/completo"];
+        if (!validSources.includes(source)) {
             return res.status(400).json({
-                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data/entrega1', 'data/entrega2' o 'data/completo'"
             });
         }
 
@@ -94,15 +95,16 @@ export const cargarCVData = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/gal
  * Carga datos de Galicia
- * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
+ * Query params opcionales: source=data/entrega1|data/entrega2|data/completo (por defecto: data/entrega2)
  */
 export const cargarGALData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data_prueba";
+        const source = (req.query.source as string) || "data/entrega2";
 
-        if (source !== "data" && source !== "data_prueba") {
+        const validSources = ["data/entrega1", "data/entrega2", "data/completo"];
+        if (!validSources.includes(source)) {
             return res.status(400).json({
-                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data/entrega1', 'data/entrega2' o 'data/completo'"
             });
         }
 
@@ -130,15 +132,16 @@ export const cargarGALData = async (req: Request, res: Response) => {
 /**
  * POST /api/carga/cat
  * Carga datos de Cataluña
- * Query params opcionales: source=data|data_prueba (por defecto: data_prueba)
+ * Query params opcionales: source=data/entrega1|data/entrega2|data/completo (por defecto: data/entrega2)
  */
 export const cargarCATData = async (req: Request, res: Response) => {
     try {
-        const source = (req.query.source as string) || "data_prueba";
+        const source = (req.query.source as string) || "data/entrega2";
 
-        if (source !== "data" && source !== "data_prueba") {
+        const validSources = ["data/entrega1", "data/entrega2", "data/completo"];
+        if (!validSources.includes(source)) {
             return res.status(400).json({
-                error: "Parámetro 'source' inválido. Valores permitidos: 'data' o 'data_prueba'"
+                error: "Parámetro 'source' inválido. Valores permitidos: 'data/entrega1', 'data/entrega2' o 'data/completo'"
             });
         }
 

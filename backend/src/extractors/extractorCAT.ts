@@ -34,14 +34,16 @@ function normalizarCoordenada(valor: number, esLatitud: boolean): number {
     return 0;
 }
 
-export async function loadCATData(dataFolder: string = "data") {
+export async function loadCATData(dataFolder: string = "data/entrega2") {
     const filePath = path.join(__dirname, `../../${dataFolder}/ITV-CAT.xml`);
     const xml = fs.readFileSync(filePath, "utf-8");
     const json = await parseStringPromise(xml);
 
     const estaciones = json.response?.row?.[0]?.row || [];
 
-    const source = dataFolder === "data_prueba" ? "PRUEBA" : "PRODUCCIÓN";
+    const source = dataFolder.includes("entrega1") ? "ENTREGA 1" :
+        dataFolder.includes("entrega2") ? "ENTREGA 2" :
+            dataFolder.includes("completo") ? "COMPLETO" : "PRODUCCIÓN";
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [CATALUÑA - ${source}] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);
