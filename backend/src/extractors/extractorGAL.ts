@@ -140,7 +140,7 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
                         nombre: nombre,
                         tipo: tipoEstacion,
                         direccion: direccion || "Sin dirección",
-                        codigo_postal: datos["C.POSTAL"],
+                        codigo_postal: (tipoEstacion === "Estacion Fija") ? datos["C.POSTAL"] : null,
                         latitud: lat,
                         longitud: lon,
                         descripcion: `Estación ITV de ${concello}`,

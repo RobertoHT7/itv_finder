@@ -149,7 +149,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
             nombre: nombre,
             tipo: tipoEstacion,
             direccion: est["DIRECCIÓN"] || "Sin dirección",
-            codigo_postal: codigoPostal,
+            codigo_postal: (tipoEstacion === "Estacion Fija") ? codigoPostal : null,
             latitud: coordenadas?.lat || 0,
             longitud: coordenadas?.lon || 0,
             descripcion: descripcion,
