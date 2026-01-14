@@ -1,26 +1,20 @@
-import fs from "fs";
-import path from "path";
-import { parseStringPromise } from "xml2js";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../utils/dbHelpers";
 import { validarYCorregirEstacion } from "../utils/validator";
 import { broadcastLog } from "../api/sseLogger";
+import { getDatosCAT, EstacionCATSource } from "../wrappers/wrapperCAT";
 
-// Función para normalizar coordenadas al rango correcto de España
+// Función vital para normalizar coordenadas de CAT (que a veces vienen multiplicadas por 10^n)
 function normalizarCoordenada(valor: number, esLatitud: boolean): number {
     if (valor === 0) return 0;
 
-    // Rangos válidos para España
     const rangoLat = { min: 27, max: 44 };
     const rangoLon = { min: -19, max: 5 };
-
     const rango = esLatitud ? rangoLat : rangoLon;
 
-    // Mantener el signo original
     const signo = valor < 0 ? -1 : 1;
     const valorAbs = Math.abs(valor);
 
-    // Probar diferentes divisores hasta encontrar uno que esté en el rango
     const divisores = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
 
     for (const divisor of divisores) {
@@ -30,40 +24,45 @@ function normalizarCoordenada(valor: number, esLatitud: boolean): number {
         }
     }
 
-    // Si ningún divisor funciona, devolver 0 (coordenada inválida)
-    console.warn(`⚠️ No se pudo normalizar coordenada ${valor} (${esLatitud ? 'lat' : 'lon'})`);
+    // Si no encaja en ningún rango válido de España, asumimos error y devolvemos 0
     return 0;
 }
 
 export async function loadCATData(dataFolder: string = "data/entrega2") {
-    const filePath = path.join(__dirname, `../../${dataFolder}/ITV-CAT.xml`);
-    const xml = fs.readFileSync(filePath, "utf-8");
-    const json = await parseStringPromise(xml);
-
-    const estaciones = json.response?.row?.[0]?.row || [];
-
-    const source = dataFolder.includes("entrega1") ? "ENTREGA 1" :
+    const sourceName = dataFolder.includes("entrega1") ? "ENTREGA 1" :
         dataFolder.includes("entrega2") ? "ENTREGA 2" :
             dataFolder.includes("completo") ? "COMPLETO" : "PRODUCCIÓN";
+
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`🔄 [CATALUÑA - ${source}] Procesando ${estaciones.length} estaciones`);
-    console.log(`${"=".repeat(80)}\n`);
-    broadcastLog(`[CATALUÑA - ${source}] Procesando ${estaciones.length} estaciones`, 'info');
+    console.log(`🔄 [CATALUÑA - ${sourceName}] Iniciando proceso ETL...`);
+    broadcastLog(`Iniciando carga de Cataluña (${sourceName})...`, 'info');
+
+    let estaciones: EstacionCATSource[] = [];
+
+    // 1. EXTRACCIÓN (Llamada al Wrapper)
+    try {
+        estaciones = await getDatosCAT(dataFolder);
+    } catch (error: any) {
+        console.error("❌ Error fatal en el wrapper CAT:", error.message);
+        broadcastLog(`Error fatal al leer fuente CAT: ${error.message}`, 'error');
+        return;
+    }
+
+    console.log(`📥 Procesando ${estaciones.length} estaciones obtenidas del wrapper.`);
 
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
-    
-    // Set para rastrear estaciones ya procesadas en esta ejecución
-    const estacionesProcesadas = new Set<string>();
 
+    // 2. TRANSFORMACIÓN Y CARGA
     for (const est of estaciones) {
-        const denominacio = est.denominaci?.[0];
-        const municipi = est.municipi?.[0];
-        const provinciaRaw = est.serveis_territorials?.[0];
-        const operador = est.operador?.[0];
+        const denominacio = est.denominaci;
+        const municipi = est.municipi;
+        const provinciaRaw = est.serveis_territorials;
+        const operador = est.operador;
 
-        // Extraer nombre de provincia limpio (ej: "Serveis Territorials de Tarragona" → "Tarragona")
+        // Limpieza específica de CAT: Extraer nombre de provincia limpio
+        // Ej: "Serveis Territorials de Tarragona" → "Tarragona"
         let provincia = provinciaRaw;
         if (provinciaRaw && provinciaRaw.includes(" de ")) {
             const partes = provinciaRaw.split(" de ");
@@ -71,20 +70,20 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         }
 
         if (!municipi || !provincia) {
-            console.warn("⚠️ Punto incompleto en XML, saltando...\n");
-            broadcastLog(`⚠️ Punto incompleto en XML, saltando...`, 'warning');
+            console.warn("⚠️ Registro incompleto (falta municipio o provincia), saltando...");
             rechazadas++;
             continue;
         }
 
-        const latRaw = est.lat?.[0] ? parseFloat(est.lat[0]) : 0;
-        const lonRaw = est.long?.[0] ? parseFloat(est.long[0]) : 0;
-        const latitud = normalizarCoordenada(latRaw, true);
-        const longitud = normalizarCoordenada(lonRaw, false);
-        const cp = est.cp?.[0] || "";
+        // Normalización de Coordenadas
+        const latRaw = parseFloat(est.lat);
+        const lonRaw = parseFloat(est.long);
+        const latitud = isNaN(latRaw) ? 0 : normalizarCoordenada(latRaw, true);
+        const longitud = isNaN(lonRaw) ? 0 : normalizarCoordenada(lonRaw, false);
+        const cp = est.cp;
 
-        // Preparar datos para validación
-        const datosEstacion = {
+        // Preparar objeto genérico para validación
+        const datosParaValidar = {
             denominaci: denominacio,
             municipi: municipi,
             provincia: provincia,
@@ -93,13 +92,13 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
             longitud: longitud
         };
 
-        // 🔍 VALIDAR Y CORREGIR DATOS
-        const validacion = validarYCorregirEstacion(datosEstacion, "Cataluña");
+        // VALIDAR Y CORREGIR
+        const validacion = validarYCorregirEstacion(datosParaValidar, "Cataluña");
 
         if (!validacion.esValido) {
             rechazadas++;
-            console.log(`\n🚫 Estación rechazada por errores críticos\n`);
-            broadcastLog(`🚫 Estación rechazada por errores críticos`, 'warning');
+            // Solo logueamos errores críticos si quieres depurar, para no ensuciar la consola
+            // console.log(`⛔ Rechazada: ${denominacio} (${municipi})`);
             continue;
         }
 
@@ -107,112 +106,77 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
             corregidas++;
         }
 
-        console.log(`\n✅ Estación validada, procediendo al procesamiento e inserción...\n`);
-        broadcastLog(`✅ Estación validada, procediendo al procesamiento e inserción...`, 'info');
-
         // Usar datos corregidos
         const datos = validacion.datosCorregidos;
 
+        // Gestión de Provincia y Localidad en BD
         const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
         if (!provinciaId) {
             rechazadas++;
+            broadcastLog(`Error gestionando provincia: ${datos.PROVINCIA}`, 'error');
             continue;
         }
 
         const localidadId = await getOrCreateLocalidad(datos.MUNICIPIO || municipi, provinciaId);
         if (!localidadId) {
             rechazadas++;
+            broadcastLog(`Error gestionando localidad: ${municipi}`, 'error');
             continue;
         }
 
-        const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija";
-        
-        // Normalizar nombre para comparación (solo estaciones fijas en Cataluña)
-        const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const claveEstacion = `${normalizar(datos.MUNICIPIO)}_${normalizar(datos.PROVINCIA)}`;
-        
-        // Verificar si ya se procesó en esta ejecución
-        if (estacionesProcesadas.has(claveEstacion)) {
-            console.log(`⚠️ Estación en "${datos.MUNICIPIO}" duplicada en el archivo, omitiendo\n`);
-            broadcastLog(`⚠️ Estación en "${datos.MUNICIPIO}" duplicada en archivo, omitida`, 'warning');
-            rechazadas++;
-            continue;
-        }
-        
-        // Marcar como procesada
-        estacionesProcesadas.add(claveEstacion);
-
+        // Transformación de CAMPOS FINALES
+        const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija"; // En CAT casi todas lo son según el XML
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
-        const nombre = `ITV de ${municipi}`;
+        const nombre = `ITV de ${municipi}`; // Estandarizamos el nombre
 
-        let contacto = est.correu_electr_nic?.[0] || "Sin contacto";
-        if (contacto.startsWith("https") || contacto.startsWith("http")) {
+        // Limpieza de contacto (algunos traen URLs en vez de emails)
+        let contacto = est.correu_electr_nic;
+        if (contacto.startsWith("http")) {
             contacto = "https://www.applusiteuve.com/es-es/contacto-itv-responde/itv-responde/";
-        }
-
-        // Validación final: asegurar que localidadId es válido
-        if (!localidadId) {
-            console.error("❌ localidadId es null o undefined, saltando estación\n");
-            broadcastLog("❌ Error: localidadId inválido", 'error');
-            rechazadas++;
-            continue;
         }
 
         const estacionData = {
             nombre: nombre,
             tipo: tipoEstacion,
-            direccion: est.adre_a?.[0] || "Sin dirección",
-            codigo_postal: datos["C.POSTAL"],
+            direccion: est.adre_a || "Sin dirección",
+            codigo_postal: String(datos["C.POSTAL"]),
             latitud,
             longitud,
             descripcion: descripcion,
-            horario: est.horari_de_servei?.[0] || "No especificado",
+            horario: est.horari_de_servei || "No especificado",
             contacto: contacto,
-            url: est.web?.[0]?.$.url || est.web?.[0] || "https://itv.cat",
+            url: est.web || "https://itv.cat",
             localidadId,
         };
 
-        // Verificar si ya existe la estación
-        const yaExiste = await existeEstacion(nombre, localidadId);
-        if (yaExiste) {
-            console.log(`⚠️ Estación "${nombre}" ya existe en la base de datos, omitiendo inserción\n`);
-            broadcastLog(`⚠️ Estación "${nombre}" ya existe, omitida`, 'warning');
-            rechazadas++;
-            continue;
-        }
+        // Comprobación de duplicados
+        const existe = await existeEstacion(nombre, localidadId);
 
-        const { error } = await supabase.from("estacion").insert(estacionData);
-        if (error) {
-            // Si es un error de duplicado, solo advertir y continuar
-            if (error.message.includes('duplicate') || error.code === '23505') {
-                console.log(`⚠️ Estación "${nombre}" duplicada detectada durante inserción, omitiendo\n`);
-                broadcastLog(`⚠️ Estación "${nombre}" duplicada, omitida`, 'warning');
+        if (existe) {
+            console.log(`⚠️ Estación "${nombre}" ya existe, omitiendo.`);
+            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+            rechazadas++;
+        } else {
+            const { error } = await supabase.from("estacion").insert(estacionData);
+            if (error) {
+                console.error("❌ Error insertando CAT:", error.message);
+                broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
                 rechazadas++;
             } else {
-                console.error("❌ Error insertando CAT:", error.message);
-                broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
-                rechazadas++;
+                cargadas++;
+                console.log(`✅ Insertada: ${nombre}`);
             }
-        } else {
-            console.log(`✅ Estación insertada correctamente en la base de datos\n`);
-            broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');
-            cargadas++;
         }
     }
 
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`📊 RESUMEN CATALUÑA - PRUEBA`);
+    console.log(`📊 RESUMEN FINAL - CATALUÑA`);
     console.log(`${"=".repeat(80)}`);
-    console.log(`✅ Estaciones cargadas: ${cargadas}`);
-    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
-    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`✅ Cargadas: ${cargadas}`);
+    console.log(`✏️  Corregidas: ${corregidas}`);
+    console.log(`❌ Rechazadas/Omitidas: ${rechazadas}`);
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
-    console.log(`${"=".repeat(80)}\n`);
-    
-    broadcastLog(`📊 RESUMEN CATALUÑA`, 'info');
-    broadcastLog(`✅ Estaciones cargadas: ${cargadas}`, 'success');
-    broadcastLog(`✏️ Estaciones con correcciones: ${corregidas}`, 'info');
-    broadcastLog(`❌ Estaciones rechazadas: ${rechazadas}`, 'warning');
-    broadcastLog(`📝 Total procesadas: ${estaciones.length}`, 'info');
+
+    broadcastLog(`Carga Cataluña finalizada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
 }

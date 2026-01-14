@@ -1,229 +1,179 @@
-import fs from "fs";
-import path from "path";
 import { supabase } from "../db/supabaseClient";
 import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../utils/dbHelpers";
-import { validarYCorregirEstacion, validarYCorregirEstacionSinCoordenadas } from "../utils/validator";
-import { validarCoordenadas } from "../utils/validator";
+import { validarYCorregirEstacionSinCoordenadas, validarCoordenadas } from "../utils/validator";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
+import { SELENIUM_CONFIG } from "../utils/seleniumConfig";
 import { broadcastLog } from "../api/sseLogger";
-
-interface EstacionCV {
-    "TIPO ESTACIÓN": string;
-    PROVINCIA: string;
-    MUNICIPIO: string;
-    "C.POSTAL": number | string;
-    "DIRECCIÓN": string;
-    "Nº ESTACIÓN": number;
-    HORARIOS: string;
-    CORREO: string;
-}
+// Importamos el wrapper recién creado
+import { getDatosCV, EstacionCVSource } from "../wrappers/wrapperCV";
 
 export async function loadCVData(dataFolder: string = "data/entrega2") {
-    const filePath = path.join(__dirname, `../../${dataFolder}/estaciones.json`);
-    const rawData = fs.readFileSync(filePath, "utf-8");
-    const estaciones: EstacionCV[] = JSON.parse(rawData);
-
-    const source = dataFolder.includes("entrega1") ? "ENTREGA 1" :
+    // Definir el origen para logs
+    const sourceName = dataFolder.includes("entrega1") ? "ENTREGA 1" :
         dataFolder.includes("entrega2") ? "ENTREGA 2" :
             dataFolder.includes("completo") ? "COMPLETO" : "PRODUCCIÓN";
+
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`🔄 [COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`);
-    console.log(`${"=".repeat(80)}\n`);
-    broadcastLog(`[COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`, 'info');
+    console.log(`🔄 [CV - ${sourceName}] Iniciando proceso ETL...`);
+    broadcastLog(`Iniciando carga de Comunidad Valenciana (${sourceName})...`, 'info');
+
+    let estaciones: EstacionCVSource[] = [];
+
+    // 1. EXTRACCIÓN (Usando el Wrapper)
+    try {
+        estaciones = await getDatosCV(dataFolder);
+    } catch (error: any) {
+        console.error("❌ Error fatal en el wrapper CV:", error.message);
+        broadcastLog(`Error fatal al leer fuente CV: ${error.message}`, 'error');
+        return;
+    }
+
+    console.log(`📥 Procesando ${estaciones.length} estaciones obtenidas del wrapper.`);
 
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
-    
-    // Set para rastrear estaciones ya procesadas en esta ejecución (nombre + localidad)
-    const estacionesProcesadas = new Set<string>();
 
+    // 2. TRANSFORMACIÓN Y CARGA
     for (const est of estaciones) {
-        // 🔍 VALIDACIÓN Y CORRECCIÓN DE DATOS (sin coordenadas aún)
+        // VALIDAR Y CORREGIR DATOS (sin coordenadas aún)
+        // Usamos la función específica para CV que no requiere lat/lon iniciales
         const validacion = validarYCorregirEstacionSinCoordenadas(est, "Comunidad Valenciana");
 
         if (!validacion.esValido) {
             rechazadas++;
-            console.log(`\n🚫 La estación será RECHAZADA por errores críticos\n`);
-            broadcastLog(`🚫 Estación rechazada por errores críticos`, 'warning');
+            console.log(`⛔ Estación rechazada por errores críticos: ${est["MUNICIPIO"]} (${est["Nº ESTACIÓN"]})`);
+            broadcastLog(`Estación rechazada: ${est["MUNICIPIO"] || 'Desconocida'}`, 'error');
             continue;
         }
 
-        console.log(`\n✅ Estación validada, procediendo a la geocodificación e inserción...\n`);
-        broadcastLog(`✅ Estación validada, procediendo a la geocodificación e inserción...`, 'info');
-
-        // 🔍 PROCESAMIENTO CON DATOS CORREGIDOS
+        // Usar datos corregidos
         const datos = validacion.datosCorregidos;
-        const rawTipo = est["TIPO ESTACIÓN"] || "";
-        const municipio = datos.MUNICIPIO || datos.PROVINCIA || "Desconocido";
+
+        // Mapeo de campos corregidos
+        const rawTipo = datos["TIPO ESTACIÓN"] || est["TIPO ESTACIÓN"] || "";
+        const municipio = datos.MUNICIPIO || datos.PROVINCIA; // Fallback
         const codigoPostal = datos["C.POSTAL"];
 
+        // Gestión de Provincia y Localidad en BD
         const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
         if (!provinciaId) {
             rechazadas++;
+            broadcastLog(`Error gestionando provincia: ${datos.PROVINCIA}`, 'error');
             continue;
         }
 
         const localidadId = await getOrCreateLocalidad(municipio, provinciaId);
         if (!localidadId) {
             rechazadas++;
+            broadcastLog(`Error gestionando localidad: ${municipio}`, 'error');
             continue;
         }
 
+        // Transformación de TIPO 
         let tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Otros";
         if (rawTipo.includes("Fija")) tipoEstacion = "Estacion Fija";
         else if (rawTipo.includes("Móvil") || rawTipo.includes("Movil")) tipoEstacion = "Estacion Movil";
         else tipoEstacion = "Otros";
-        
-        // Normalizar nombre para comparación
-        const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        let claveEstacion: string;
-        
-        // Para estaciones fijas: usar municipio_provincia
-        // Para móviles/agrícolas: usar tipo_provincia (permite 1 de cada tipo por provincia)
-        if (tipoEstacion === "Estacion Fija") {
-            claveEstacion = `${normalizar(municipio)}_${normalizar(datos.PROVINCIA)}`;
-        } else if (tipoEstacion === "Estacion Movil") {
-            claveEstacion = `movil_${normalizar(datos.PROVINCIA)}`;
-        } else {
-            claveEstacion = `agricola_${normalizar(datos.PROVINCIA)}`;
-        }
-        
-        // Verificar si ya se procesó en esta ejecución
-        if (estacionesProcesadas.has(claveEstacion)) {
-            const tipoTexto = tipoEstacion === "Estacion Fija" ? "en " + municipio : 
-                            tipoEstacion === "Estacion Movil" ? "Móvil de " + datos.PROVINCIA :
-                            "Agrícola de " + datos.PROVINCIA;
-            console.log(`⚠️ Estación ${tipoTexto} duplicada en el archivo, omitiendo\n`);
-            broadcastLog(`⚠️ Estación ${tipoTexto} duplicada en archivo, omitida`, 'warning');
-            rechazadas++;
-            continue;
-        }
-        
-        // Marcar como procesada
-        estacionesProcesadas.add(claveEstacion);
 
-        let url = "https://sitval.com/centros/";
-        if (tipoEstacion === "Estacion Movil") {
-            url += "movil";
-        } else if (tipoEstacion === "Otros" || rawTipo.includes("Agrícola")) {
-            url += "agricola";
-        }
+        // Transformación de NOMBRE y DESCRIPCIÓN
+        const nombre = `ITV ${municipio} ${est["Nº ESTACIÓN"]}`;
+        const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
-        const nombre = tipoEstacion === "Estacion Movil"
-            ? `Estación Móvil - ${datos.PROVINCIA}`
-            : tipoEstacion === "Otros"
-                ? `Estación Agrícola - ${datos.PROVINCIA}`
-                : `Estación ITV ${municipio}`;
-        const descripcion = tipoEstacion === "Estacion Movil"
-            ? `Estación ITV Móvil provincia de ${datos.PROVINCIA} con código: ${est["Nº ESTACIÓN"]}`
-            : `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
+        // 3. GEOCODIFICACIÓN (Selenium)
+        // Solo intentamos geocodificar si es Fija u Otros, y si no tenemos coordenadas previas (el JSON no trae)
+        let latitud = 0;
+        let longitud = 0;
 
-        let coordenadas: { lat: number; lon: number } | null = null;
-        console.log(`Tipo de estación: ${tipoEstacion}`);
-        if (tipoEstacion !== "Estacion Movil" && tipoEstacion !== "Otros") {
-            console.log(`📍 Geocodificando: ${municipio}...`);
-            broadcastLog(`📍 Geocodificando: ${municipio}...`, 'info');
-            coordenadas = await geocodificarConSelenium(
-                est["DIRECCIÓN"] || "",
-                municipio,
-                est.PROVINCIA,
-                codigoPostal
-            );
-        } else {
-            console.log(`Estación móvil, se omite geocodificación.`);
-            broadcastLog(`Estación móvil, se omite geocodificación.`, 'info');
-        }
+        console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
+        broadcastLog(`Geocodificando: ${municipio}...`, 'info');
 
-        await delay(500);
-
-        // Validación final: asegurar que localidadId es válido
-        if (!localidadId) {
-            console.error("❌ localidadId es null o undefined, saltando estación\n");
-            broadcastLog("❌ Error: localidadId inválido", 'error');
-            rechazadas++;
-            continue;
-        }
-
-        const estacionData = {
-            nombre: nombre,
-            tipo: tipoEstacion,
-            direccion: est["DIRECCIÓN"] || "Sin dirección",
-            codigo_postal: (tipoEstacion === "Estacion Fija") ? codigoPostal : null,
-            latitud: coordenadas?.lat || 0,
-            longitud: coordenadas?.lon || 0,
-            descripcion: descripcion,
-            horario: est.HORARIOS || "No especificado",
-            contacto: est.CORREO || "Sin contacto",
-            url: url,
-            localidadId,
-        };
+        const coordenadas = await geocodificarConSelenium(
+            est["DIRECCIÓN"] || "",
+            municipio,
+            datos.PROVINCIA,
+            String(codigoPostal)
+        );
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
-            broadcastLog(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`, 'success');
 
             // Validar coordenadas después de obtenerlas
             const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
 
             if (erroresCoordenadas.length > 0) {
-                console.warn(`⚠️ Coordenadas fuera de rango:`);
-                erroresCoordenadas.forEach(err => {
-                    console.warn(`   - ${err.mensaje}`);
-                    broadcastLog(`⚠️ ${err.mensaje}`, 'warning');
-                });
+                console.warn(`⚠️ Coordenadas fuera de rango para ${municipio}:`);
+                erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
+                // Decisión de diseño: ¿Insertamos con 0,0 o rechazamos? 
+                // Aquí mantenemos 0,0 si son inválidas, o rechazamos si la política es estricta.
+                // Asumimos que si Selenium devuelve algo, intentamos usarlo, pero si es inválido volvemos a 0.
+                latitud = 0;
+                longitud = 0;
+            } else {
+                latitud = coordenadas.lat;
+                longitud = coordenadas.lon;
             }
-        } else if (tipoEstacion !== "Estacion Movil") {
+        } else {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
-            broadcastLog(`⚠️ No se pudieron obtener coordenadas para ${municipio}`, 'warning');
+            // Si es Estación Móvil, es aceptable no tener coordenadas fijas
+            if (tipoEstacion !== "Estacion Movil") {
+                broadcastLog(`No se obtuvieron coordenadas para ${municipio}`, 'warning');
+            }
         }
 
-        // Contar correcciones al final
+        // Pequeño delay para no saturar Google Maps/Selenium
+        await delay(SELENIUM_CONFIG.DELAY_BETWEEN_REQUESTS || 1000);
+
+        // Preparar objeto final para Supabase
+        const estacionData = {
+            nombre: nombre,
+            tipo: tipoEstacion,
+            direccion: est["DIRECCIÓN"] || "Sin dirección",
+            codigo_postal: String(codigoPostal),
+            latitud: latitud,
+            longitud: longitud,
+            descripcion: descripcion,
+            horario: est.HORARIOS || "No especificado",
+            contacto: est.CORREO || "Sin contacto",
+            url: "https://sitval.com/", // URL genérica para CV
+            localidadId,
+        };
+
+        // Comprobación de duplicados antes de insertar
+        const existe = await existeEstacion(nombre, localidadId);
+
+        if (existe) {
+            console.log(`⚠️ Estación "${nombre}" ya existe, omitiendo.`);
+            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+            rechazadas++; // O podrías contarlo como 'omitidas' si prefieres
+        } else {
+            const { error } = await supabase.from("estacion").insert(estacionData);
+            if (error) {
+                console.error("❌ Error insertando estación:", error.message);
+                broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+                rechazadas++;
+            } else {
+                cargadas++;
+                console.log(`✅ Insertada: ${nombre}`);
+                // broadcastLog(`Insertada: ${nombre}`, 'success'); // Comentar para no saturar el log visual
+            }
+        }
+
+        // Contar correcciones
         if (validacion.advertencias.length > 0) {
             corregidas++;
         }
-
-        // Verificar si ya existe la estación antes de intentar insertar
-        const yaExiste = await existeEstacion(nombre, localidadId);
-        if (yaExiste) {
-            console.log(`⚠️ Estación "${nombre}" ya existe en la base de datos, omitiendo inserción\n`);
-            broadcastLog(`⚠️ Estación "${nombre}" ya existe, omitida`, 'warning');
-            rechazadas++;
-            continue;
-        }
-
-        // Intentar insertar - Si falla por duplicado, manejar el error
-        const { error } = await supabase.from("estacion").insert(estacionData);
-        if (error) {
-            // Si es un error de duplicado, solo advertir y continuar
-            if (error.message.includes('duplicate') || error.code === '23505') {
-                console.log(`⚠️ Estación "${nombre}" duplicada detectada durante inserción, omitiendo\n`);
-                broadcastLog(`⚠️ Estación "${nombre}" duplicada, omitida`, 'warning');
-                rechazadas++;
-            } else {
-                console.error("❌ Error insertando estación CV:", error.message);
-                broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
-                rechazadas++;
-            }
-        } else {
-            console.log(`✅ Estación insertada correctamente en la base de datos\n`);
-            broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');
-            cargadas++;
-        }
     }
 
+    // Resumen final
     console.log(`\n${"=".repeat(80)}`);
-    console.log(`📊 RESUMEN COMUNIDAD VALENCIANA - PRUEBA`);
+    console.log(`📊 RESUMEN FINAL - COMUNIDAD VALENCIANA`);
     console.log(`${"=".repeat(80)}`);
-    console.log(`✅ Estaciones cargadas: ${cargadas}`);
-    console.log(`✏️  Estaciones con correcciones: ${corregidas}`);
-    console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
+    console.log(`✅ Cargadas: ${cargadas}`);
+    console.log(`✏️  Corregidas: ${corregidas}`);
+    console.log(`❌ Rechazadas/Omitidas: ${rechazadas}`);
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
-    
-    broadcastLog(`📊 RESUMEN COMUNIDAD VALENCIANA`, 'info');
-    broadcastLog(`✅ Estaciones cargadas: ${cargadas}`, 'success');
-    broadcastLog(`✏️ Estaciones con correcciones: ${corregidas}`, 'info');
-    broadcastLog(`❌ Estaciones rechazadas: ${rechazadas}`, 'warning');
-    broadcastLog(`📝 Total procesadas: ${estaciones.length}`, 'info');
+
+    broadcastLog(`Carga CV finalizada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
 }
