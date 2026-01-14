@@ -5,6 +5,7 @@ import { getOrCreateProvincia, getOrCreateLocalidad } from "../utils/dbHelpers";
 import { validarYCorregirEstacion, validarYCorregirEstacionSinCoordenadas } from "../utils/validator";
 import { validarCoordenadas } from "../utils/validator";
 import { geocodificarConSelenium, delay } from "../utils/geocoding";
+import { broadcastLog } from "../api/sseLogger";
 
 interface EstacionCV {
     "TIPO ESTACIÓN": string;
@@ -28,6 +29,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`);
     console.log(`${"=".repeat(80)}\n`);
+    broadcastLog(`[COMUNIDAD VALENCIANA - ${source}] Procesando ${estaciones.length} estaciones`, 'info');
 
     let cargadas = 0;
     let rechazadas = 0;
@@ -40,10 +42,12 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         if (!validacion.esValido) {
             rechazadas++;
             console.log(`\n🚫 La estación será RECHAZADA por errores críticos\n`);
+            broadcastLog(`🚫 Estación rechazada por errores críticos`, 'warning');
             continue;
         }
 
         console.log(`\n✅ Estación validada, procediendo a la geocodificación e inserción...\n`);
+        broadcastLog(`✅ Estación validada, procediendo a la geocodificación e inserción...`, 'info');
 
         // 🔍 PROCESAMIENTO CON DATOS CORREGIDOS
         const datos = validacion.datosCorregidos;
@@ -88,6 +92,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         console.log(`Tipo de estación: ${tipoEstacion}`);
         if (tipoEstacion !== "Estacion Movil" && tipoEstacion !== "Otros") {
             console.log(`📍 Geocodificando: ${municipio}...`);
+            broadcastLog(`📍 Geocodificando: ${municipio}...`, 'info');
             coordenadas = await geocodificarConSelenium(
                 est["DIRECCIÓN"] || "",
                 municipio,
@@ -96,6 +101,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
             );
         } else {
             console.log(`Estación móvil, se omite geocodificación.`);
+            broadcastLog(`Estación móvil, se omite geocodificación.`, 'info');
         }
 
         await delay(500);
@@ -116,16 +122,21 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
 
         if (coordenadas) {
             console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+            broadcastLog(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`, 'success');
 
             // Validar coordenadas después de obtenerlas
             const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
 
             if (erroresCoordenadas.length > 0) {
                 console.warn(`⚠️ Coordenadas fuera de rango:`);
-                erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
+                erroresCoordenadas.forEach(err => {
+                    console.warn(`   - ${err.mensaje}`);
+                    broadcastLog(`⚠️ ${err.mensaje}`, 'warning');
+                });
             }
         } else if (tipoEstacion !== "Estacion Movil") {
             console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
+            broadcastLog(`⚠️ No se pudieron obtener coordenadas para ${municipio}`, 'warning');
         }
 
         // Contar correcciones al final
@@ -136,9 +147,11 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando estación CV:", error.message);
+            broadcastLog(`❌ Error insertando estación: ${error.message}`, 'error');
             rechazadas++;
         } else {
             console.log(`✅ Estación insertada correctamente en la base de datos\n`);
+            broadcastLog(`✅ Estación insertada correctamente (${cargadas + 1}/${estaciones.length})`, 'success');
             cargadas++;
         }
     }
@@ -151,4 +164,10 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
     console.log(`❌ Estaciones rechazadas: ${rechazadas}`);
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
+    
+    broadcastLog(`📊 RESUMEN COMUNIDAD VALENCIANA`, 'info');
+    broadcastLog(`✅ Estaciones cargadas: ${cargadas}`, 'success');
+    broadcastLog(`✏️ Estaciones con correcciones: ${corregidas}`, 'info');
+    broadcastLog(`❌ Estaciones rechazadas: ${rechazadas}`, 'warning');
+    broadcastLog(`📝 Total procesadas: ${estaciones.length}`, 'info');
 }

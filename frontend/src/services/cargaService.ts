@@ -78,12 +78,14 @@ export const connectToLogs = (
             onMessage({
                 message: data.message || data,
                 timestamp: data.timestamp ? new Date(data.timestamp).getTime() : Date.now(),
+                level: data.level || 'info',
             });
         } catch {
             // Si no es JSON, enviar el mensaje tal cual
             onMessage({
                 message: event.data,
                 timestamp: Date.now(),
+                level: 'info',
             });
         }
     };
