@@ -304,22 +304,46 @@ export default function DataLoadPage() {
                 {logs.length === 0 ? (
                   <p className="text-gray-400 text-center py-8">Esperando ejecución de carga de datos...</p>
                 ) : (
-                  <div className="space-y-2">
-                    {logs.map((log, index) => (
-                      <div
-                        key={index}
-                        className={`flex items-start gap-3 p-2 rounded ${log.message.includes('✅') || log.message.includes('✓') ? 'bg-green-900/20 text-green-400' :
-                          log.message.includes('❌') ? 'bg-red-900/20 text-red-400' :
-                            log.message.includes('🚀') || log.message.includes('📦') ? 'bg-blue-900/20 text-blue-400' :
-                              'text-gray-300'
-                          }`}
-                      >
-                        <span className="text-gray-500 text-xs flex-shrink-0">
-                          {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}
-                        </span>
-                        <span className="flex-1">{log.message}</span>
-                      </div>
-                    ))}
+                  <div className="space-y-1">
+                    {logs.map((log, index) => {
+                      // Renderizado especial para separadores
+                      if (log.level === 'separator') {
+                        return (
+                          <div key={index} className="py-1">
+                            <div className="border-t-2 border-gray-700" />
+                          </div>
+                        )
+                      }
+
+                      // Determinar estilos según el nivel
+                      const getLogStyle = () => {
+                        switch (log.level) {
+                          case 'success':
+                            return 'bg-green-900/20 text-green-400 border-l-4 border-green-500'
+                          case 'error':
+                            return 'bg-red-900/20 text-red-400 border-l-4 border-red-500'
+                          case 'warning':
+                            return 'bg-yellow-900/20 text-yellow-400 border-l-4 border-yellow-500'
+                          case 'info':
+                          default:
+                            return 'bg-blue-900/10 text-gray-300 border-l-4 border-blue-500/30'
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={index}
+                          className={`flex items-start gap-3 p-2 pl-3 rounded ${getLogStyle()}`}
+                        >
+                          {log.timestamp && (
+                            <span className="text-gray-500 text-xs flex-shrink-0 min-w-[70px]">
+                              {new Date(log.timestamp).toLocaleTimeString()}:
+                            </span>
+                          )}
+                          <span className="flex-1"> {log.message}</span>
+                        </div>
+                      )
+                    })}
                     <div ref={logsEndRef} />
                   </div>
                 )}

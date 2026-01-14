@@ -23,22 +23,30 @@ export const cargarTodosLosDatos = async (req: Request, res: Response) => {
 
         console.log(`\n🔄 Iniciando carga completa desde: ${source}`);
         console.log("==========================================\n");
-        broadcastLog(`Iniciando carga completa desde: ${source}`, 'info');
+
+        broadcastLog('Iniciando carga completa', 'info');
+        broadcastLog('', 'separator');
 
         broadcastLog('Cargando datos de Comunidad Valenciana...', 'info');
         await loadCVData(source);
-        broadcastLog('✓ Comunidad Valenciana completada', 'success');
+        broadcastLog('Comunidad Valenciana completada', 'success');
+
+        broadcastLog('', 'separator');
 
         broadcastLog('Cargando datos de Galicia...', 'info');
         await loadGALData(source);
-        broadcastLog('✓ Galicia completada', 'success');
+        broadcastLog('Galicia completada', 'success');
+
+        broadcastLog('', 'separator');
 
         broadcastLog('Cargando datos de Cataluña...', 'info');
         await loadCATData(source);
-        broadcastLog('✓ Cataluña completada', 'success');
+        broadcastLog('Cataluña completada', 'success');
+
+        broadcastLog('', 'separator');
 
         console.log("\n✅ Proceso ETL completo\n");
-        broadcastLog('🎉 Proceso ETL completo - Todas las estaciones cargadas', 'success');
+        broadcastLog('Proceso ETL completo - Todas las estaciones cargadas', 'success');
 
         return res.status(201).json({
             success: true,
@@ -72,10 +80,12 @@ export const cargarCVData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Comunidad Valenciana desde: ${source}\n`);
-        broadcastLog(`Iniciando carga de Comunidad Valenciana (${source})`, 'info');
+        broadcastLog('Iniciando carga de Comunidad Valenciana', 'info');
+        broadcastLog('', 'separator');
+
         await loadCVData(source);
         console.log("✅ Carga CV completada\n");
-        broadcastLog('✓ Comunidad Valenciana cargada exitosamente', 'success');
+        broadcastLog('Comunidad Valenciana cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,
@@ -109,10 +119,12 @@ export const cargarGALData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Galicia desde: ${source}\n`);
-        broadcastLog(`Iniciando carga de Galicia (${source})`, 'info');
+        broadcastLog('Iniciando carga de Galicia', 'info');
+        broadcastLog('', 'separator');
+
         await loadGALData(source);
         console.log("✅ Carga GAL completada\n");
-        broadcastLog('✓ Galicia cargada exitosamente', 'success');
+        broadcastLog('Galicia cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,
@@ -146,10 +158,11 @@ export const cargarCATData = async (req: Request, res: Response) => {
         }
 
         console.log(`\n🔄 Cargando Cataluña desde: ${source}\n`);
-        broadcastLog(`Iniciando carga de Cataluña (${source})`, 'info');
+        broadcastLog('Iniciando carga de Cataluña', 'info');
+        broadcastLog('', 'separator');
         await loadCATData(source);
         console.log("✅ Carga CAT completada\n");
-        broadcastLog('✓ Cataluña cargada exitosamente', 'success');
+        broadcastLog('Cataluña cargada exitosamente', 'success');
 
         return res.status(201).json({
             success: true,

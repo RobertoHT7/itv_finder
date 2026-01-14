@@ -4,6 +4,7 @@
 */
 
 import { Response } from "express";
+import type { LogMessage } from "@shared/types/api.types";
 
 // Interfaz para los clientes conectados
 interface SSEClient {
@@ -58,7 +59,7 @@ function removeSSEClient(clientId: string): void {
 /**
  * Enviar un mensaje de log a todos los clientes conectados
  */
-export function broadcastLog(message: string, level: 'info' | 'success' | 'error' | 'warning' = 'info'): void {
+export function broadcastLog(message: string, level: LogMessage['level'] = 'info'): void {
     const data = {
         message,
         level,

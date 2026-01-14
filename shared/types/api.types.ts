@@ -70,7 +70,7 @@ export interface FiltrosBusqueda {
 export interface LogMessage {
     message: string;
     timestamp?: number;
-    level?: 'info' | 'success' | 'error' | 'warning';
+    level?: 'info' | 'success' | 'error' | 'warning' | 'separator';
 }
 
 // Estado de carga (para UI)
