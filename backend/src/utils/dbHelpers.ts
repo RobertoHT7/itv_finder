@@ -76,3 +76,37 @@ export async function getOrCreateLocalidad(nombre: string, provinciaId: number):
 
     return (created as Localidad).id;
 }
+
+/**
+ * Verifica si ya existe una estación con el mismo nombre (case-insensitive) 
+ * y localidad_id en la base de datos
+ */
+export async function existeEstacion(nombre: string, localidadId: number): Promise<boolean> {
+    const nombreNorm = nombre.trim();
+
+    const { data: estaciones, error } = await supabase
+        .from("estacion")
+        .select("id, nombre")
+        .eq("localidad_id", localidadId);
+
+    if (error) {
+        console.error("Error verificando estación existente:", error.message);
+        return false;
+    }
+
+    if (!estaciones || estaciones.length === 0) {
+        return false;
+    }
+
+    // Comparar nombres ignorando mayúsculas/minúsculas y normalizando caracteres especiales
+    const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const nombreBuscado = normalizar(nombreNorm);
+    
+    const existe = estaciones.some(est => normalizar(est.nombre) === nombreBuscado);
+    
+    if (existe) {
+        console.log(`🔍 Duplicado detectado: "${nombreNorm}" ya existe en localidad ${localidadId}`);
+    }
+    
+    return existe;
+}
