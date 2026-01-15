@@ -35,7 +35,7 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
 
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [CATALUÑA - ${sourceName}] Iniciando proceso ETL...`);
-    broadcastLog(`Iniciando carga de Cataluña (${sourceName})...`, 'info');
+    broadcastLog('▶️ Cargando datos de Cataluña...', 'info');
 
     let estaciones: EstacionCATSource[] = [];
 
@@ -127,7 +127,7 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         // Transformación de CAMPOS FINALES
         const tipoEstacion: "Estacion Fija" | "Estacion Movil" | "Otros" = "Estacion Fija"; // En CAT casi todas lo son según el XML
         const descripcion = `${denominacio} - ${municipi} (${operador})`;
-        const nombre = `ITV de ${municipi}`; // Estandarizamos el nombre
+        const nombre = `Estación ITV de ${municipi}`; // Estandarizamos el nombre
 
         // Limpieza de contacto (algunos traen URLs en vez de emails)
         let contacto = est.correu_electr_nic;
@@ -179,5 +179,5 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
 
-    broadcastLog(`Carga Cataluña finalizada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
+    broadcastLog(`✅ Cataluña completada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
 }

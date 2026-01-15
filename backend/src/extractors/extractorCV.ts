@@ -15,7 +15,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
 
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [CV - ${sourceName}] Iniciando proceso ETL...`);
-    broadcastLog(`Iniciando carga de Comunidad Valenciana (${sourceName})...`, 'info');
+    broadcastLog('▶️ Cargando datos de Comunidad Valenciana...', 'info');
 
     let estaciones: EstacionCVSource[] = [];
 
@@ -53,7 +53,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         // Mapeo de campos corregidos
         const rawTipo = datos["TIPO ESTACIÓN"] || est["TIPO ESTACIÓN"] || "";
         const municipio = datos.MUNICIPIO || datos.PROVINCIA; // Fallback
-        const codigoPostal = datos["C.POSTAL"];
+        let codigoPostal = datos["C.POSTAL"];
 
         // Gestión de Provincia y Localidad en BD
         const provinciaId = await getOrCreateProvincia(datos.PROVINCIA);
@@ -77,8 +77,19 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         else tipoEstacion = "Otros";
 
         // Transformación de NOMBRE y DESCRIPCIÓN
-        const nombre = `ITV ${municipio} ${est["Nº ESTACIÓN"]}`;
+        const nombre = `Estación ITV de ${municipio}`;
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
+
+        // Comprobación de duplicados antes de geocodificar e insertar
+        const existe = await existeEstacion(nombre, localidadId);
+
+        if (existe) {
+            console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
+            broadcastLog(`🔴 Estación duplicada omitida: ${nombre}`, 'warning');
+            broadcastLog('===================================', 'separator');
+            rechazadas++;
+            continue;
+        }
 
         // 3. GEOCODIFICACIÓN (Selenium)
         // Solo geocodificamos estaciones FIJAS (las móviles y agrícolas/otros no tienen ubicación fija)
@@ -87,7 +98,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
 
         if (tipoEstacion === "Estacion Fija") {
             console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
-            broadcastLog(`Geocodificando: ${municipio}...`, 'info');
+            broadcastLog(`📍 Geocodificando: ${municipio}...`, 'info');
 
             const coordenadas = await geocodificarConSelenium(
                 est["DIRECCIÓN"] || "",
@@ -98,6 +109,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
 
             if (coordenadas) {
                 console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+                broadcastLog(`✅ Coordenadas obtenidas`, 'success');
 
                 // Validar coordenadas después de obtenerlas
                 const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
@@ -113,7 +125,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
                 }
             } else {
                 console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
-                broadcastLog(`No se obtuvieron coordenadas para ${municipio}`, 'warning');
+                broadcastLog(`⚠️ No se obtuvieron coordenadas para ${municipio}`, 'warning');
             }
 
             // Pequeño delay para no saturar Google Maps/Selenium
@@ -121,7 +133,8 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         } else {
             // Estación móvil o agrícola: no geocodificar
             console.log(`ℹ️ Estación ${tipoEstacion} "${nombre}" - No se geocodifica (sin ubicación fija)`);
-            broadcastLog(`Estación ${tipoEstacion} - No requiere geocodificación`, 'info');
+            broadcastLog(`ℹ️ Estación ${tipoEstacion} - No requiere geocodificación`, 'info');
+            codigoPostal = null;
         }
 
         // Preparar objeto final para Supabase
@@ -139,26 +152,19 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
             localidadId,
         };
 
-        // Comprobación de duplicados antes de insertar
-        const existe = await existeEstacion(nombre, localidadId);
-
-        if (existe) {
-            console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
-            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
-            rechazadas++;
-            continue;
-        }
-
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando estación:", error.message);
-            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+            broadcastLog(`❌ Error BD insertando ${nombre}: ${error.message}`, 'error');
             rechazadas++;
         } else {
             cargadas++;
             console.log(`✅ Insertada: ${nombre}`);
-            // broadcastLog(`Insertada: ${nombre}`, 'success'); // Comentar para no saturar el log visual
+            broadcastLog(`⭐ ${nombre} añadida correctamente`, 'success');
         }
+
+        // Separador entre estaciones
+        broadcastLog('===================================', 'separator');
 
         // Contar correcciones
         if (validacion.advertencias.length > 0) {
@@ -176,5 +182,5 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
 
-    broadcastLog(`Carga CV finalizada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
+    broadcastLog(`✅ Comunidad Valenciana completada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
 }

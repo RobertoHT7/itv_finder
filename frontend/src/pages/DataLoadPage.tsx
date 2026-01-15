@@ -242,20 +242,20 @@ export default function DataLoadPage() {
                   <BarChart3 className="w-5 h-5 text-green-600" />
                   Estadísticas actuales
                 </h3>
-                <div style={{display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: '12px'}}>
-                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: '12px' }}>
+                  <div style={{ flex: '1', minWidth: '0' }} className="bg-white rounded-lg p-3 border border-gray-200">
                     <p className="text-xs text-gray-500 text-center whitespace-nowrap">Comunitat Valenciana</p>
                     <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.comunidad_valenciana ?? 0).toLocaleString()}</p>
                   </div>
-                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div style={{ flex: '1', minWidth: '0' }} className="bg-white rounded-lg p-3 border border-gray-200">
                     <p className="text-xs text-gray-500 text-center whitespace-nowrap">Galicia</p>
                     <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.galicia ?? 0).toLocaleString()}</p>
                   </div>
-                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div style={{ flex: '1', minWidth: '0' }} className="bg-white rounded-lg p-3 border border-gray-200">
                     <p className="text-xs text-gray-500 text-center whitespace-nowrap">Cataluña</p>
                     <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.cataluna ?? 0).toLocaleString()}</p>
                   </div>
-                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                  <div style={{ flex: '1', minWidth: '0' }} className="bg-white rounded-lg p-3 border border-gray-200">
                     <p className="text-xs text-gray-500 text-center whitespace-nowrap">Total</p>
                     <p className="text-xl font-bold text-purple-600 text-center">{(estadisticas?.total ?? 0).toLocaleString()}</p>
                   </div>
@@ -308,9 +308,18 @@ export default function DataLoadPage() {
                     {logs.map((log, index) => {
                       // Renderizado especial para separadores
                       if (log.level === 'separator') {
+                        // Si el mensaje contiene "===", mostrar el mensaje en lugar de línea
+                        if (log.message && typeof log.message === 'string' && log.message.includes('===')) {
+                          return (
+                            <div key={index} className="py-2 text-center">
+                              <span className="text-gray-600 text-sm">{log.message}</span>
+                            </div>
+                          )
+                        }
+                        // Si no, mostrar línea horizontal simple
                         return (
-                          <div key={index} className="py-1">
-                            <div className="border-t-2 border-gray-700" />
+                          <div key={index} className="py-2">
+                            <div className="border-t border-gray-700" />
                           </div>
                         )
                       }
@@ -340,7 +349,7 @@ export default function DataLoadPage() {
                               {new Date(log.timestamp).toLocaleTimeString()}:
                             </span>
                           )}
-                          <span className="flex-1"> {log.message}</span>
+                          <span className="flex-1">{log.message}</span>
                         </div>
                       )
                     })}

@@ -48,7 +48,7 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
 
     console.log(`\n${"=".repeat(80)}`);
     console.log(`🔄 [GALICIA - ${sourceName}] Iniciando proceso ETL...`);
-    broadcastLog(`Iniciando carga de Galicia (${sourceName})...`, 'info');
+    broadcastLog('▶️ Cargando datos de Galicia...', 'info');
 
     let estaciones: EstacionGALSource[] = [];
 
@@ -210,5 +210,5 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
 
-    broadcastLog(`Carga Galicia finalizada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
+    broadcastLog(`✅ Galicia completada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
 }

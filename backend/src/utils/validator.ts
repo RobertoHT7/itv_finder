@@ -481,8 +481,7 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
     const nombreEstacion = estacion.MUNICIPIO || estacion.CONCELLO || estacion.municipi || (esMovil ? "Estación móvil" : "Estación Agrícola");
     console.log(`\n🔍 Validando estación [${origen}]: ${nombreEstacion}`);
     console.log("=".repeat(70));
-    broadcastLog(`🔍 Validando estación [${origen}]: ${nombreEstacion}`, 'info');
-    broadcastLog("=".repeat(70), 'info');
+    broadcastLog(`➖ Validando estación [${origen}]: ${nombreEstacion} ➖`, 'info');
 
 
     // 1. PROVINCIA
@@ -507,10 +506,10 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
 
     if (esMovil) {
         console.log("⚠️  Estación móvil, se omite validación de municipio y CP.");
-        broadcastLog("⚠️ Estación móvil, se omite validación de municipio y CP.", 'warning');
+        broadcastLog("Estación móvil, se omite validación de municipio y CP.", 'warning');
     } else if (esAgricola) {
         console.log("⚠️  Estación agrícola, se omite validación de municipio y CP.");
-        broadcastLog("⚠️ Estación agrícola, se omite validación de municipio y CP.", 'warning');
+        broadcastLog("Estación agrícola, se omite validación de municipio y CP.", 'warning');
     }
 
     if (!esMovil && !esAgricola) {
@@ -550,7 +549,7 @@ export function validarYCorregirEstacionSinCoordenadas(estacion: any, origen: st
                     corregido: true
                 });
                 console.log(`✏️  PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`);
-                broadcastLog(`✏️ PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`, 'warning');
+                broadcastLog(`PROVINCIA: Corregida por coherencia con municipio: "${resultProvincia.valorCorregido}" → "${provinciaCorrecta}"`, 'warning');
                 provinciaFinal = provinciaCorrecta;
                 datosCorregidos.PROVINCIA = provinciaCorrecta;
             }
@@ -622,7 +621,7 @@ export function validarYCorregirEstacion(estacion: any, origen: string): Resulta
         console.log("\n" + "=".repeat(70));
         console.log(`✅ ESTACIÓN VÁLIDA (${resultadoBase.advertencias.length} corrección/correcciones aplicadas)`);
         broadcastLog(`✅ COORDENADAS VÁLIDAS: ${lat}, ${lon}`, 'success');
-        broadcastLog(`✅ ESTACIÓN VÁLIDA (${resultadoBase.advertencias.length} corrección/correcciones aplicadas)`, 'success');
+        broadcastLog(`✅ Estación válida`, 'success');
     }
 
     const esValido = resultadoBase.errores.length === 0;
