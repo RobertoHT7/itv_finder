@@ -242,22 +242,22 @@ export default function DataLoadPage() {
                   <BarChart3 className="w-5 h-5 text-green-600" />
                   Estadísticas actuales
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">C. Valenciana</p>
-                    <p className="text-2xl font-bold text-blue-600">{estadisticas.comunidad_valenciana}</p>
+                <div style={{display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: '12px'}}>
+                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-500 text-center whitespace-nowrap">Comunitat Valenciana</p>
+                    <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.comunidad_valenciana ?? 0).toLocaleString()}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Galicia</p>
-                    <p className="text-2xl font-bold text-blue-600">{estadisticas.galicia}</p>
+                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-500 text-center whitespace-nowrap">Galicia</p>
+                    <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.galicia ?? 0).toLocaleString()}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Catalunya</p>
-                    <p className="text-2xl font-bold text-blue-600">{estadisticas.cataluna}</p>
+                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-500 text-center whitespace-nowrap">Cataluña</p>
+                    <p className="text-xl font-bold text-blue-600 text-center">{(estadisticas?.cataluna ?? 0).toLocaleString()}</p>
                   </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Total</p>
-                    <p className="text-2xl font-bold text-purple-600">{estadisticas.total}</p>
+                  <div style={{flex: '1', minWidth: '0'}} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs text-gray-500 text-center whitespace-nowrap">Total</p>
+                    <p className="text-xl font-bold text-purple-600 text-center">{(estadisticas?.total ?? 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function DataLoadPage() {
               </div>
             )}
 
-            <div className="form-actions flex gap-3">
+            <div className="form-actions flex gap-3 mt-6">
               <button
                 onClick={handleCargar}
                 disabled={loadingState === 'loading' || (!sources.all && !sources.galicia && !sources.valencia && !sources.catalunya)}

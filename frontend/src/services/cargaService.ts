@@ -42,7 +42,8 @@ export const cargarEstacionesCAT = async (): Promise<CargaResponse> => {
  * Obtener estadísticas de carga
  */
 export const obtenerEstadisticas = async (): Promise<EstadisticasCargaResponse> => {
-    return apiClient.get<EstadisticasCargaResponse>('/api/estadisticas');
+    // Usar el endpoint de carga que devuelve las estadísticas por comunidad
+    return apiClient.get<EstadisticasCargaResponse>('/api/carga/estadisticas');
 };
 
 /**
