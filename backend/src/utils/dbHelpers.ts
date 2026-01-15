@@ -87,7 +87,7 @@ export async function existeEstacion(nombre: string, localidadId: number): Promi
     const { data: estaciones, error } = await supabase
         .from("estacion")
         .select("id, nombre")
-        .eq("localidad_id", localidadId);
+        .eq("localidadId", localidadId);
 
     if (error) {
         console.error("Error verificando estación existente:", error.message);
@@ -101,12 +101,12 @@ export async function existeEstacion(nombre: string, localidadId: number): Promi
     // Comparar nombres ignorando mayúsculas/minúsculas y normalizando caracteres especiales
     const normalizar = (str: string) => str.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const nombreBuscado = normalizar(nombreNorm);
-    
+
     const existe = estaciones.some(est => normalizar(est.nombre) === nombreBuscado);
-    
+
     if (existe) {
         console.log(`🔍 Duplicado detectado: "${nombreNorm}" ya existe en localidad ${localidadId}`);
     }
-    
+
     return existe;
 }

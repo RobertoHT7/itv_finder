@@ -153,19 +153,20 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         const existe = await existeEstacion(nombre, localidadId);
 
         if (existe) {
-            console.log(`⚠️ Estación "${nombre}" ya existe, omitiendo.`);
+            console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
             broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
             rechazadas++;
+            continue;
+        }
+
+        const { error } = await supabase.from("estacion").insert(estacionData);
+        if (error) {
+            console.error("❌ Error insertando CAT:", error.message);
+            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+            rechazadas++;
         } else {
-            const { error } = await supabase.from("estacion").insert(estacionData);
-            if (error) {
-                console.error("❌ Error insertando CAT:", error.message);
-                broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
-                rechazadas++;
-            } else {
-                cargadas++;
-                console.log(`✅ Insertada: ${nombre}`);
-            }
+            cargadas++;
+            console.log(`✅ Insertada: ${nombre}`);
         }
     }
 

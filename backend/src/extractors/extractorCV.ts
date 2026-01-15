@@ -81,48 +81,48 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         const descripcion = `Estación ITV ${municipio} con código: ${est["Nº ESTACIÓN"]}`;
 
         // 3. GEOCODIFICACIÓN (Selenium)
-        // Solo intentamos geocodificar si es Fija u Otros, y si no tenemos coordenadas previas (el JSON no trae)
+        // Solo geocodificamos estaciones FIJAS (las móviles y agrícolas/otros no tienen ubicación fija)
         let latitud = 0;
         let longitud = 0;
 
-        console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
-        broadcastLog(`Geocodificando: ${municipio}...`, 'info');
+        if (tipoEstacion === "Estacion Fija") {
+            console.log(`📍 Geocodificando con Selenium: ${municipio}...`);
+            broadcastLog(`Geocodificando: ${municipio}...`, 'info');
 
-        const coordenadas = await geocodificarConSelenium(
-            est["DIRECCIÓN"] || "",
-            municipio,
-            datos.PROVINCIA,
-            String(codigoPostal)
-        );
+            const coordenadas = await geocodificarConSelenium(
+                est["DIRECCIÓN"] || "",
+                municipio,
+                datos.PROVINCIA,
+                String(codigoPostal)
+            );
 
-        if (coordenadas) {
-            console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
+            if (coordenadas) {
+                console.log(`✅ Coordenadas obtenidas: ${coordenadas.lat}, ${coordenadas.lon}`);
 
-            // Validar coordenadas después de obtenerlas
-            const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
+                // Validar coordenadas después de obtenerlas
+                const erroresCoordenadas = validarCoordenadas(coordenadas.lat, coordenadas.lon);
 
-            if (erroresCoordenadas.length > 0) {
-                console.warn(`⚠️ Coordenadas fuera de rango para ${municipio}:`);
-                erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
-                // Decisión de diseño: ¿Insertamos con 0,0 o rechazamos? 
-                // Aquí mantenemos 0,0 si son inválidas, o rechazamos si la política es estricta.
-                // Asumimos que si Selenium devuelve algo, intentamos usarlo, pero si es inválido volvemos a 0.
-                latitud = 0;
-                longitud = 0;
+                if (erroresCoordenadas.length > 0) {
+                    console.warn(`⚠️ Coordenadas fuera de rango para ${municipio}:`);
+                    erroresCoordenadas.forEach(err => console.warn(`   - ${err.mensaje}`));
+                    latitud = 0;
+                    longitud = 0;
+                } else {
+                    latitud = coordenadas.lat;
+                    longitud = coordenadas.lon;
+                }
             } else {
-                latitud = coordenadas.lat;
-                longitud = coordenadas.lon;
-            }
-        } else {
-            console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
-            // Si es Estación Móvil, es aceptable no tener coordenadas fijas
-            if (tipoEstacion !== "Estacion Movil") {
+                console.warn(`⚠️ No se pudieron obtener coordenadas para ${municipio}`);
                 broadcastLog(`No se obtuvieron coordenadas para ${municipio}`, 'warning');
             }
-        }
 
-        // Pequeño delay para no saturar Google Maps/Selenium
-        await delay(SELENIUM_CONFIG.DELAY_BETWEEN_REQUESTS || 1000);
+            // Pequeño delay para no saturar Google Maps/Selenium
+            await delay(SELENIUM_CONFIG.DELAY_BETWEEN_REQUESTS || 1000);
+        } else {
+            // Estación móvil o agrícola: no geocodificar
+            console.log(`ℹ️ Estación ${tipoEstacion} "${nombre}" - No se geocodifica (sin ubicación fija)`);
+            broadcastLog(`Estación ${tipoEstacion} - No requiere geocodificación`, 'info');
+        }
 
         // Preparar objeto final para Supabase
         const estacionData = {
@@ -143,20 +143,21 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         const existe = await existeEstacion(nombre, localidadId);
 
         if (existe) {
-            console.log(`⚠️ Estación "${nombre}" ya existe, omitiendo.`);
+            console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
             broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
-            rechazadas++; // O podrías contarlo como 'omitidas' si prefieres
+            rechazadas++;
+            continue;
+        }
+
+        const { error } = await supabase.from("estacion").insert(estacionData);
+        if (error) {
+            console.error("❌ Error insertando estación:", error.message);
+            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+            rechazadas++;
         } else {
-            const { error } = await supabase.from("estacion").insert(estacionData);
-            if (error) {
-                console.error("❌ Error insertando estación:", error.message);
-                broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
-                rechazadas++;
-            } else {
-                cargadas++;
-                console.log(`✅ Insertada: ${nombre}`);
-                // broadcastLog(`Insertada: ${nombre}`, 'success'); // Comentar para no saturar el log visual
-            }
+            cargadas++;
+            console.log(`✅ Insertada: ${nombre}`);
+            // broadcastLog(`Insertada: ${nombre}`, 'success'); // Comentar para no saturar el log visual
         }
 
         // Contar correcciones

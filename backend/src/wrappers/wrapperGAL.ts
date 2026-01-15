@@ -18,7 +18,7 @@ export interface EstacionGALSource {
 
 /**
  * Wrapper para Galicia.
- * Lee el archivo CSV original (codificación latin1, separador ;) y devuelve los datos crudos.
+ * Lee el archivo CSV original (codificación UTF-8, separador ;) y devuelve los datos crudos.
  */
 export async function getDatosGAL(dataFolder: string = "data/entrega2"): Promise<EstacionGALSource[]> {
     const filePath = path.join(__dirname, `../../${dataFolder}/Estacions_ITV.csv`);
@@ -31,11 +31,24 @@ export async function getDatosGAL(dataFolder: string = "data/entrega2"): Promise
             return reject(new Error(`El archivo no existe en la ruta: ${filePath}`));
         }
 
-        // Es CRUCIAL usar encoding 'latin1' (o 'binary'/'iso-8859-1') para este archivo de Galicia
-        // de lo contrario, las tildes y ñ se romperán.
-        fs.createReadStream(filePath, { encoding: 'latin1' })
+        // Usar encoding UTF-8 para leer correctamente los caracteres gallegos
+        fs.createReadStream(filePath, { encoding: 'utf8' })
             .pipe(csv({ separator: ";" })) // El CSV de Galicia usa punto y coma
-            .on("data", (row) => results.push(row))
+            .on("data", (row) => {
+                // Limpiar las claves del objeto (por si tienen espacios o BOM)
+                const cleanRow: any = {};
+                for (const [key, value] of Object.entries(row)) {
+                    const cleanKey = key.trim().replace(/^\uFEFF/, ''); // Eliminar BOM si existe
+                    cleanRow[cleanKey] = typeof value === 'string' ? value.trim() : value;
+                }
+
+                // DEBUG: Ver las claves que genera el parser (solo primera fila)
+                if (results.length === 0) {
+                    console.log(`[Wrapper GAL DEBUG] Claves generadas:`, Object.keys(cleanRow));
+                    console.log(`[Wrapper GAL DEBUG] Primera fila:`, cleanRow);
+                }
+                results.push(cleanRow);
+            })
             .on("end", () => {
                 console.log(`[Wrapper GAL] Leídos ${results.length} registros crudos.`);
                 resolve(results);

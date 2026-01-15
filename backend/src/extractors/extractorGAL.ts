@@ -63,6 +63,11 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
 
     console.log(`📥 Procesando ${estaciones.length} estaciones obtenidas del wrapper.`);
 
+    // DEBUG: Ver la primera estación completa
+    if (estaciones.length > 0) {
+        console.log(`[DEBUG GAL] Primera estación del wrapper:`, JSON.stringify(estaciones[0], null, 2));
+    }
+
     let cargadas = 0;
     let rechazadas = 0;
     let corregidas = 0;
@@ -79,6 +84,14 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
         const email = est["CORREO ELECTRÓNICO"];
         const web = est["SOLICITUDE DE CITA PREVIA"];
         const horario = est["HORARIO"];
+
+        // DEBUG: Ver qué está llegando del wrapper
+        console.log(`[DEBUG GAL] Procesando estación:`, {
+            nombre: nombreOriginal,
+            concello,
+            provincia,
+            keys: Object.keys(est)
+        });
 
         // Validar datos obligatorios básicos antes de procesar nada
         if (!nombreOriginal || !concello || !provincia) {
@@ -141,10 +154,27 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
         }
 
         // Transformación de NOMBRE 
-        const nombre = `Estación ITV ${nombreOriginal}`;
+        // Limpiar el prefijo "Estación ITV" si ya existe para evitar duplicación
+        let nombreLimpio = nombreOriginal.trim();
+        if (nombreLimpio.toLowerCase().startsWith("estación itv")) {
+            nombreLimpio = nombreLimpio.substring(12).trim(); // Eliminar "Estación ITV"
+        } else if (nombreLimpio.toLowerCase().startsWith("estacion itv")) {
+            nombreLimpio = nombreLimpio.substring(12).trim(); // Eliminar "Estacion ITV"
+        }
+        const nombre = `Estación ITV ${nombreLimpio}`;
 
         // Transformación de CONTACTO 
         const contacto = `Tel: ${telefono || "N/A"} Email: ${email || "N/A"}`;
+
+        // Comprobación de duplicados ANTES de preparar los datos
+        const existe = await existeEstacion(nombre, localidadId);
+
+        if (existe) {
+            console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
+            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+            rechazadas++;
+            continue;
+        }
 
         const estacionData = {
             nombre: nombre,
@@ -160,23 +190,14 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
             localidadId,
         };
 
-        // Comprobación de duplicados
-        const existe = await existeEstacion(nombre, localidadId);
-
-        if (existe) {
-            console.log(`⚠️ Estación "${nombre}" ya existe, omitiendo.`);
-            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+        const { error } = await supabase.from("estacion").insert(estacionData);
+        if (error) {
+            console.error("❌ Error insertando GAL:", error.message);
+            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
             rechazadas++;
         } else {
-            const { error } = await supabase.from("estacion").insert(estacionData);
-            if (error) {
-                console.error("❌ Error insertando GAL:", error.message);
-                broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
-                rechazadas++;
-            } else {
-                cargadas++;
-                console.log(`✅ Insertada: ${nombre}`);
-            }
+            cargadas++;
+            console.log(`✅ Insertada: ${nombre}`);
         }
     }
 
