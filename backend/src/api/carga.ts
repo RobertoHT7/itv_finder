@@ -12,6 +12,7 @@ import { addSSEClient, broadcastLog } from "./sseLogger";
  */
 export const cargarTodosLosDatos = async (req: Request, res: Response) => {
     try {
+        const SEPARATOR_LENGTH = 50;
         const source = (req.query.source as string) || "data/entrega2";
 
         const validSources = ["data/entrega1", "data/entrega2", "data/completo"];
@@ -21,24 +22,25 @@ export const cargarTodosLosDatos = async (req: Request, res: Response) => {
             });
         }
 
-        console.log(`\n🔄 Iniciando carga completa desde: ${source}`);
-        console.log("==========================================\n");
+        console.log(`\n🔄 Iniciando carga completa desde: ${source}\n`);
 
         broadcastLog('INICIANDO CARGA COMPLETA', 'info');
-        broadcastLog('', 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
 
         await loadCVData(source);
 
-        broadcastLog('', 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
 
         await loadGALData(source);
 
-        broadcastLog('', 'separator');
-
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
 
         await loadCATData(source);
 
-        broadcastLog('', 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
 
         console.log("\n✅ Proceso ETL completo\n");
         broadcastLog('⭐ Proceso ETL completo - Todas las estaciones cargadas', 'success');

@@ -3,7 +3,8 @@ import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../u
 import { validarYCorregirEstacion } from "../utils/validator";
 import { broadcastLog } from "../api/sseLogger";
 import { getDatosCAT, EstacionCATSource } from "../wrappers/wrapperCAT";
-
+// Longitud del separador visual entre estaciones
+const SEPARATOR_LENGTH = 50;
 // Función vital para normalizar coordenadas de CAT (que a veces vienen multiplicadas por 10^n)
 function normalizarCoordenada(valor: number, esLatitud: boolean): number {
     if (valor === 0) return 0;
@@ -154,7 +155,8 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
 
         if (existe) {
             console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
-            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+            broadcastLog(`🔴 Estación duplicada omitida: ${nombre}`, 'warning');
+            broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
             rechazadas++;
             continue;
         }
@@ -162,12 +164,16 @@ export async function loadCATData(dataFolder: string = "data/entrega2") {
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando CAT:", error.message);
-            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+            broadcastLog(`❌ Error BD insertando ${nombre}: ${error.message}`, 'error');
             rechazadas++;
         } else {
             cargadas++;
             console.log(`✅ Insertada: ${nombre}`);
+            broadcastLog(`⭐ ${nombre} añadida correctamente`, 'success');
         }
+
+        // Separador entre estaciones
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
     }
 
     console.log(`\n${"=".repeat(80)}`);

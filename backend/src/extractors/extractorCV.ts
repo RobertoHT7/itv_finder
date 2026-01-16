@@ -6,7 +6,8 @@ import { SELENIUM_CONFIG } from "../utils/seleniumConfig";
 import { broadcastLog } from "../api/sseLogger";
 // Importamos el wrapper recién creado
 import { getDatosCV, EstacionCVSource } from "../wrappers/wrapperCV";
-
+// Longitud del separador visual entre estaciones
+const SEPARATOR_LENGTH = 50;
 export async function loadCVData(dataFolder: string = "data/entrega2") {
     // Definir el origen para logs
     const sourceName = dataFolder.includes("entrega1") ? "ENTREGA 1" :
@@ -86,7 +87,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         if (existe) {
             console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
             broadcastLog(`🔴 Estación duplicada omitida: ${nombre}`, 'warning');
-            broadcastLog('===================================', 'separator');
+            broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
             rechazadas++;
             continue;
         }
@@ -164,7 +165,7 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
         }
 
         // Separador entre estaciones
-        broadcastLog('===================================', 'separator');
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
 
         // Contar correcciones
         if (validacion.advertencias.length > 0) {
@@ -182,5 +183,5 @@ export async function loadCVData(dataFolder: string = "data/entrega2") {
     console.log(`📝 Total procesadas: ${estaciones.length}`);
     console.log(`${"=".repeat(80)}\n`);
 
-    broadcastLog(`✅ Comunidad Valenciana completada. Cargadas: ${cargadas}, Rechazadas: ${rechazadas}`, 'success');
+    broadcastLog(`🟢 Comunidad Valenciana completada. Cargadas: ${cargadas}✅, Rechazadas: ${rechazadas}❌`, 'success');
 }

@@ -3,7 +3,8 @@ import { getOrCreateProvincia, getOrCreateLocalidad, existeEstacion } from "../u
 import { validarYCorregirEstacion } from "../utils/validator";
 import { broadcastLog } from "../api/sseLogger";
 import { getDatosGAL, EstacionGALSource } from "../wrappers/wrapperGAL";
-
+// Longitud del separador visual entre estaciones
+const SEPARATOR_LENGTH = 50;
 // Función auxiliar para parsear coordenadas mixtas (Decimal y Grados Minutos)
 // Esta lógica es específica de la fuente de Galicia, por eso se queda en el Extractor (Transformación)
 function parseGalicianCoordinates(coordString: string): { lat: number, lon: number } {
@@ -171,7 +172,8 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
 
         if (existe) {
             console.log(`⚠️ Estación "${nombre}" ya existe en localidad ${localidadId}, omitiendo.`);
-            broadcastLog(`Estación duplicada omitida: ${nombre}`, 'warning');
+            broadcastLog(`🔴 Estación duplicada omitida: ${nombre}`, 'warning');
+            broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
             rechazadas++;
             continue;
         }
@@ -193,12 +195,16 @@ export async function loadGALData(dataFolder: string = "data/entrega2") {
         const { error } = await supabase.from("estacion").insert(estacionData);
         if (error) {
             console.error("❌ Error insertando GAL:", error.message);
-            broadcastLog(`Error BD insertando ${nombre}: ${error.message}`, 'error');
+            broadcastLog(`❌ Error BD insertando ${nombre}: ${error.message}`, 'error');
             rechazadas++;
         } else {
             cargadas++;
             console.log(`✅ Insertada: ${nombre}`);
+            broadcastLog(`⭐ ${nombre} añadida correctamente`, 'success');
         }
+
+        // Separador entre estaciones
+        broadcastLog('='.repeat(SEPARATOR_LENGTH), 'separator');
     }
 
     console.log(`\n${"=".repeat(80)}`);
